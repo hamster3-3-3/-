@@ -1,0 +1,266 @@
+﻿<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>米飯盲測評分表</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Inter 字體 -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+    </style>
+    <!-- JavaScript for local data management and export -->
+    <script>
+        let sampleCount = 0;
+
+        /**
+         * 根據成品評價 (A/B/C) 計算分數。
+         * @param {string} evaluation - 成品評價 (A, B, 或 C)。
+         * @returns {number} - 對應的分數。
+         */
+        function calculateScore(evaluation) {
+            switch (evaluation) {
+                case 'A': return 40;
+                case 'B': return 30;
+                case 'C': return 20;
+                default: return 0;
+            }
+        }
+
+        /**
+         * 處理單一樣本的評價變動，並更新分數顯示。
+         * @param {number} index - 樣本區塊的索引。
+         */
+        window.updateScore = function(index) {
+            const container = document.getElementById('sample-' + index);
+            const selectedEvaluation = container.querySelector('input[name="evaluation-' + index + '"]:checked');
+            const scoreDisplay = container.querySelector('[data-score]');
+            
+            if (selectedEvaluation) {
+                const score = calculateScore(selectedEvaluation.value);
+                scoreDisplay.textContent = score;
+                scoreDisplay.classList.remove('text-gray-400');
+                scoreDisplay.classList.add('text-amber-600', 'font-extrabold');
+            } else {
+                scoreDisplay.textContent = '0';
+                scoreDisplay.classList.add('text-gray-400');
+                scoreDisplay.classList.remove('text-amber-600', 'font-extrabold');
+            }
+        };
+
+        /**
+         * 新增一個樣本評分區塊。
+         */
+        window.addSample = function() {
+            const index = sampleCount++;
+            const container = document.getElementById('sample-container');
+            
+            // 使用 data-index 屬性來追蹤樣本的唯一索引
+            const sampleHtml = `
+                <div id="sample-${index}" class="sample-entry p-6 border-2 border-amber-300 rounded-xl bg-amber-50 shadow-lg relative" data-index="${index}">
+                    <button type="button" onclick="removeSample('sample-${index}')" class="absolute top-3 right-3 text-red-500 hover:text-red-700 transition duration-150 ease-in-out focus:outline-none" aria-label="移除此樣本">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2 2m2-2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </button>
+                    
+                    <h3 class="text-xl font-semibold text-amber-700 mb-4">樣本 ${index + 1} 評價</h3>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">樣本編號</label>
+                        <input type="text" data-sample-id 
+                               class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500" 
+                               placeholder="請輸入樣本代碼 (如 A1, B2)">
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">樣本評價內容 (僅以成品米飯評判)</label>
+                        <textarea data-content rows="3" 
+                                  class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500" 
+                                  placeholder="請詳細描述米飯的口感、香氣、外觀等"></textarea>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 border-t pt-4">
+                        <div class="col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">成品評價 (成品評價 A=40, B=30, C=20)</label>
+                            <div class="flex flex-wrap gap-4">
+                                ${['A', 'B', 'C'].map(grade => `
+                                    <label class="inline-flex items-center cursor-pointer">
+                                        <input type="radio" name="evaluation-${index}" value="${grade}" 
+                                               class="form-radio h-5 w-5 text-amber-600 focus:ring-amber-500" 
+                                               onchange="updateScore(${index})">
+                                        <span class="ml-2 text-gray-900 font-medium">${grade}</span>
+                                    </label>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="col-span-1 border-l pl-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">成品分數</label>
+                            <p data-score class="text-4xl text-gray-400 font-extrabold transition-colors duration-300">0</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            container.insertAdjacentHTML('beforeend', sampleHtml);
+        };
+
+        /**
+         * 移除特定的樣本評分區塊。
+         * @param {string} id - 樣本區塊的 HTML ID。
+         */
+        window.removeSample = function(id) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.remove();
+            }
+        };
+
+        /**
+         * 將所有收集到的評分資料匯出為 CSV 格式。
+         */
+        window.exportToCSV = function() {
+            const rater = document.getElementById('rater').value.trim();
+            const date = document.getElementById('date').value.trim();
+            const company = document.getElementById('company').value.trim();
+            const sampleSections = document.querySelectorAll('.sample-entry');
+
+            // 使用 alert() 取代 custom modal 來處理錯誤提示
+            if (!rater || !date || !company) {
+                alert('錯誤：請填寫「評價者」、「日期」和「部門/單位」欄位。');
+                return;
+            }
+
+            if (sampleSections.length === 0) {
+                alert('錯誤：請新增至少一個米飯樣本評分。');
+                return;
+            }
+
+            // CSV Header (與 Excel 檔案圖片的欄位對應)
+            let csvContent = "評價者,日期,部門/單位,樣本編號,樣本評價內容,成品評價,成品分數\n";
+
+            // 輔助函數：清理字串，處理逗號和換行符號
+            const cleanString = (str) => {
+                if (!str) return '';
+                // 移除換行符號，並將字串用雙引號包住以處理逗號
+                let cleaned = str.replace(/\r?\n|\r/g, ' ');
+                return `"${cleaned.replace(/"/g, '""')}"`; // 處理雙引號
+            };
+            
+            let allValid = true;
+
+            sampleSections.forEach((section) => {
+                // 從 data-index 屬性中獲取正確的索引來查找 radio button
+                const index = section.getAttribute('data-index');
+                const sampleId = section.querySelector('[data-sample-id]').value.trim();
+                const content = section.querySelector('[data-content]').value.trim();
+                const evaluation = section.querySelector('input[name="evaluation-' + index + '"]:checked');
+                const score = section.querySelector('[data-score]').textContent;
+
+                // 檢查是否有遺漏的必填欄位
+                if (!sampleId || !content || !evaluation) {
+                    allValid = false;
+                    return; // 跳出當前迴圈
+                }
+
+                const row = [
+                    cleanString(rater),
+                    cleanString(date),
+                    cleanString(company),
+                    cleanString(sampleId),
+                    cleanString(content),
+                    cleanString(evaluation.value),
+                    score
+                ].join(',');
+
+                csvContent += row + '\n';
+            });
+            
+            if (!allValid) {
+                alert('錯誤：請確認所有樣本的「編號」、「評價內容」和「成品評價」皆已填寫完整。');
+                return;
+            }
+
+            // 建立 Blob 物件，指定為 CSV 格式 (添加 BOM \uFEFF 以確保中文在 Excel 中正確顯示)
+            const BOM = '\uFEFF';
+            const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+            
+            // 建立下載連結
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            
+            // 設置檔案名稱: 米飯評分表_評價者姓名_日期.csv
+            const fileName = `米飯評分表_${rater}_${date.replace(/-/g, '')}.csv`;
+            
+            link.setAttribute('href', url);
+            link.setAttribute('download', fileName);
+            link.style.visibility = 'hidden';
+            
+            // 觸發下載
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            // 提示下載成功
+            alert(`評分資料已匯出為 ${fileName}`);
+        };
+
+        // 頁面載入完成後預設新增一個樣本區塊
+        window.onload = function() {
+            window.addSample(); 
+        };
+    </script>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div class="max-w-4xl mx-auto bg-white p-6 md:p-10 rounded-xl shadow-2xl">
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-8 border-b-4 border-amber-500 pb-2">
+            米飯盲測評分表
+        </h1>
+
+        <!-- 表單總體資訊 -->
+        <form id="rating-form" onsubmit="return false;">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 p-4 bg-gray-50 rounded-lg border">
+                <div>
+                    <label for="rater" class="block text-sm font-medium text-gray-700 mb-1">評價者</label>
+                    <input type="text" id="rater" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500" placeholder="請輸入姓名" required>
+                </div>
+                <div>
+                    <label for="date" class="block text-sm font-medium text-gray-700 mb-1">日期</label>
+                    <input type="date" id="date" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500" value="<?php echo date('Y-m-d'); ?>" required>
+                </div>
+                <div>
+                    <label for="company" class="block text-sm font-medium text-gray-700 mb-1">部門/單位</label>
+                    <input type="text" id="company" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-amber-500 focus:border-amber-500" placeholder="業同或您的部門" required>
+                </div>
+            </div>
+        
+            <h2 class="text-2xl font-bold text-gray-800 mt-8 mb-4">樣本評價內容</h2>
+            
+            <!-- 樣本評分容器 -->
+            <div id="sample-container" class="space-y-8">
+                <!-- 樣本評分區塊將會透過 JS 新增到這裡 -->
+            </div>
+
+            <div class="flex justify-end mt-8">
+                <button type="button" onclick="addSample()" class="flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out shadow-lg">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    新增樣本
+                </button>
+            </div>
+            
+            <!-- 匯出按鈕 -->
+            <div class="mt-10 border-t pt-6">
+                <button type="button" onclick="exportToCSV()" class="w-full p-4 text-lg font-semibold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition duration-150 ease-in-out shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 flex items-center justify-center">
+                    <svg class="w-6 h-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    匯出評分表 (CSV 檔案)
+                </button>
+            </div>
+        </form>
+
+    </div>
+</body>
+</html>
