@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>壽司飯感官評測系統 - 雲端版</title>
+    <title>壽司飯感官評測系統</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
@@ -20,6 +20,7 @@
             text-align: center;
             min-height: 4rem;
             line-height: 1.4;
+            border-radius: 0.75rem;
         }
         .score-btn.active { 
             background-color: #f97316; 
@@ -41,7 +42,6 @@
             background-color: white;
         }
 
-        /* 讀取動畫 */
         .loader {
             border: 3px solid #f3f3f3;
             border-radius: 50%;
@@ -60,26 +60,25 @@
         <!-- Header -->
         <div class="bg-white p-6 rounded-2xl shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center border-t-4 border-orange-500">
             <div>
-                <h1 class="text-2xl font-black text-slate-800">壽司飯感官評測系統</h1>
-                <p class="text-slate-500 text-sm mt-1">樣品編號：A(D+1), A(D+2), B(D+1), B(D+2)</p>
+                <h1 class="text-2xl font-black text-slate-800 text-center md:text-left">壽司飯感官評測系統</h1>
             </div>
-            <div class="mt-4 md:mt-0 flex flex-col items-end gap-3">
-                <input type="text" id="assessorName" placeholder="填寫評測者姓名" class="border-b border-slate-300 p-2 focus:border-orange-500 outline-none text-right w-48 bg-transparent">
+            <div class="mt-4 md:mt-0 flex flex-col items-center md:items-end gap-3">
+                <input type="text" id="assessorName" placeholder="輸入評測者姓名" class="border-b border-slate-300 p-2 focus:border-orange-500 outline-none text-right w-48 bg-transparent">
                 <div class="flex gap-2">
                     <button onclick="exportCSV()" class="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg font-bold hover:bg-slate-200 transition text-sm">
                         下載 CSV
                     </button>
-                    <button id="uploadBtn" onclick="handleGoogleUpload()" class="bg-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition text-sm flex items-center">
+                    <button id="uploadBtn" onclick="handleGoogleUpload()" class="bg-orange-500 text-white px-4 py-2 rounded-lg font-bold hover:bg-orange-600 transition text-sm flex items-center shadow-lg">
                         <span id="uploadText">上傳至 Google Drive</span>
                     </button>
                 </div>
             </div>
         </div>
 
-        <!-- 狀態提示 -->
-        <div id="statusMsg" class="hidden mb-4 p-4 rounded-xl text-sm font-bold"></div>
+        <!-- 狀態提示區域 -->
+        <div id="statusMsg" class="hidden mb-4 p-4 rounded-xl text-sm font-bold shadow-sm border animate-pulse"></div>
 
-        <!-- 品項分類切換 -->
+        <!-- 分類切換 -->
         <div class="flex bg-slate-100 rounded-t-xl overflow-hidden shadow-inner">
             <button onclick="switchCategory('細卷')" id="tab-細卷" class="tab-btn flex-1 active">細卷系列</button>
             <button onclick="switchCategory('脆卷')" id="tab-脆卷" class="tab-btn flex-1">脆卷系列</button>
@@ -95,18 +94,22 @@
             </div>
 
             <div id="formContent" class="p-6 md:p-8 space-y-10">
-                <!-- 內容由 JS 生成 -->
+                <!-- 由 JS 生成內容 -->
             </div>
+        </div>
+
+        <div class="mt-8 text-center text-slate-400 text-xs">
+            系統已連結 Client ID: 145250373024...
         </div>
     </div>
 
     <script>
-        // 將 gisLoaded 定義在最前面，防止腳本加載完成時函數未定義
-        window.gisLoaded = function() {
-            console.log("Google Identity Services loaded");
-        };
+        // --- 核心設定 ---
+        const CLIENT_ID = '145250373024-2sr8sibb62deq3d6633okt64d62q0ki9.apps.googleusercontent.com';
+        let accessToken = null;
+        let tokenClient;
 
-        // --- 樣品設定 ---
+        // --- 資料結構 ---
         const sampleIds = ['A(D+1)', 'A(D+2)', 'B(D+1)', 'B(D+2)'];
         const categories = ['細卷', '脆卷', '手卷'];
         const scoreMapping = {
@@ -126,67 +129,53 @@
         let currentCategory = '細卷';
         let currentId = 'A(D+1)';
 
-        // --- Google Drive API 相關變數 ---
-        let tokenClient;
-        let accessToken = null;
+        // --- 初始化 Google API ---
+        window.gisLoaded = function() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: 'https://www.googleapis.com/auth/drive.file',
+                callback: '',
+            });
+        };
 
         async function handleGoogleUpload() {
             const btn = document.getElementById('uploadBtn');
             const text = document.getElementById('uploadText');
-            
             btn.disabled = true;
-            text.innerHTML = '<span class="loader"></span> 處理中...';
+            text.innerHTML = '<span class="loader"></span> 準備中...';
 
             try {
-                await requestToken();
-                if (!accessToken) throw new Error("授權失敗");
-
+                await getToken();
                 const csvContent = generateCSVData();
-                const fileName = `壽司評測_${document.getElementById('assessorName').value || '未具名'}_${new Date().toISOString().slice(0,10)}.csv`;
-
+                const userName = document.getElementById('assessorName').value || '未具名';
+                const fileName = `壽司評測_${userName}_${new Date().toISOString().slice(0,10)}.csv`;
+                text.innerHTML = '<span class="loader"></span> 上傳中...';
                 await uploadToDrive(fileName, csvContent);
-                showStatus("✅ 已成功上傳至您的 Google 雲端硬碟根目錄！", "bg-green-100 text-green-700");
+                showStatus("✅ 上傳成功！", "bg-green-100 text-green-700 border-green-200");
             } catch (err) {
                 console.error(err);
-                showStatus("❌ 上傳失敗：" + err.message, "bg-red-100 text-red-700");
+                let msg = "上傳失敗。";
+                if (err.error === 'popup_closed_by_user') msg = "授權視窗已關閉。";
+                showStatus(`❌ ${msg}`, "bg-red-100 text-red-700 border-red-200");
             } finally {
                 btn.disabled = false;
                 text.innerText = "上傳至 Google Drive";
             }
         }
 
-        function requestToken() {
+        function getToken() {
             return new Promise((resolve, reject) => {
-                try {
-                    // 請務必替換為您在 Google Cloud Console 申請的 Client ID
-                    const CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com'; 
-                    
-                    if (CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
-                        throw new Error("請先在程式碼第 127 行設定您的 Google Cloud Client ID 才能使用雲端功能。");
-                    }
-
-                    tokenClient = google.accounts.oauth2.initTokenClient({
-                        client_id: CLIENT_ID,
-                        scope: 'https://www.googleapis.com/auth/drive.file',
-                        callback: (response) => {
-                            if (response.error !== undefined) reject(response);
-                            accessToken = response.access_token;
-                            resolve(response);
-                        },
-                    });
-                    tokenClient.requestAccessToken({prompt: 'consent'});
-                } catch (e) {
-                    reject(e);
-                }
+                tokenClient.callback = (response) => {
+                    if (response.error !== undefined) reject(response);
+                    accessToken = response.access_token;
+                    resolve(response);
+                };
+                tokenClient.requestAccessToken({ prompt: 'consent' });
             });
         }
 
-        async function uploadToDrive(fileName, content) {
-            const metadata = {
-                name: fileName,
-                mimeType: 'text/csv',
-            };
-
+        async function uploadToDrive(name, content) {
+            const metadata = { name: name, mimeType: 'text/csv' };
             const form = new FormData();
             form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
             form.append('file', new Blob([content], { type: 'text/csv' }));
@@ -197,11 +186,11 @@
                 body: form,
             });
 
-            if (!response.ok) throw new Error("API 回傳錯誤");
+            if (!response.ok) throw new Error("Drive API 錯誤");
             return await response.json();
         }
 
-        // --- 核心邏輯 ---
+        // --- 介面呈現與邏輯 ---
         function switchCategory(cat) {
             currentCategory = cat;
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -223,33 +212,42 @@
             const data = allData[dataKey];
             
             container.innerHTML = `
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-12">
-                    <div class="lg:col-span-2 space-y-10">
-                        <section>
-                            <h3 class="flex items-center gap-3 font-bold text-slate-800 mb-5 text-lg">
-                                <span class="bg-slate-800 text-white w-7 h-7 flex items-center justify-center rounded-lg text-sm">1</span>
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div class="lg:col-span-2 space-y-8">
+                        <section class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                            <h3 class="flex items-center gap-3 font-bold text-slate-800 mb-4">
+                                <span class="bg-orange-500 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs">1</span>
                                 外觀描述 (Appearance)
                             </h3>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">${renderScoreButtons('appearance', [{v:1, t:'飯粒不完整、光澤不均勻'},{v:2, t:'飯粒不完整、光澤均勻'},{v:3, t:'飯粒完整、光澤均勻'},{v:4, t:'飯粒完整、光澤不均勻'}])}</div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                ${renderScoreButtons('appearance', [{v:1, t:'飯粒不完整、光澤不均勻'},{v:2, t:'飯粒不完整、光澤均勻'},{v:3, t:'飯粒完整、光澤均勻'},{v:4, t:'飯粒完整、光澤不均勻'}])}
+                            </div>
                         </section>
-                        <section>
-                            <h3 class="flex items-center gap-3 font-bold text-slate-800 mb-5 text-lg">
-                                <span class="bg-slate-800 text-white w-7 h-7 flex items-center justify-center rounded-lg text-sm">2</span>
+
+                        <section class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                            <h3 class="flex items-center gap-3 font-bold text-slate-800 mb-4">
+                                <span class="bg-orange-500 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs">2</span>
                                 口感硬度 (Texture)
                             </h3>
-                            <div class="grid grid-cols-5 gap-3">${renderScoreButtons('texture', [{v:1, t:'極硬'},{v:2, t:'偏硬'},{v:3, t:'軟硬適中'},{v:4, t:'偏軟爛'},{v:5, t:'極軟爛'}])}</div>
+                            <div class="grid grid-cols-5 gap-2">
+                                ${renderScoreButtons('texture', [{v:1, t:'極硬'},{v:2, t:'偏硬'},{v:3, t:'適中'},{v:4, t:'偏軟'},{v:5, t:'極軟'}])}
+                            </div>
                         </section>
-                        <section>
-                            <h3 class="flex items-center gap-3 font-bold text-slate-800 mb-5 text-lg">
-                                <span class="bg-slate-800 text-white w-7 h-7 flex items-center justify-center rounded-lg text-sm">3</span>
+
+                        <section class="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                            <h3 class="flex items-center gap-3 font-bold text-slate-800 mb-4">
+                                <span class="bg-orange-500 text-white w-6 h-6 flex items-center justify-center rounded-full text-xs">3</span>
                                 老化程度 (Staling)
                             </h3>
-                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">${renderScoreButtons('staling', [{v:1, t:'完全無老化'},{v:2, t:'些許老化'},{v:3, t:'大部分老化'},{v:4, t:'完全老化'}])}</div>
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                ${renderScoreButtons('staling', [{v:1, t:'無'},{v:2, t:'些許'},{v:3, t:'多數'},{v:4, t:'完全'}])}
+                            </div>
                         </section>
                     </div>
-                    <div class="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-                        <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2">綜合感官評語</h3>
-                        <textarea oninput="updateComment(this.value)" class="w-full h-64 p-4 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-orange-500 outline-none transition-all shadow-inner bg-white">${data.comment}</textarea>
+
+                    <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                        <h3 class="font-bold text-slate-800 mb-3 text-sm">綜合感官評語</h3>
+                        <textarea oninput="updateComment(this.value)" placeholder="請輸入觀察..." class="w-full h-48 p-4 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-orange-500 outline-none shadow-inner bg-white">${data.comment}</textarea>
                     </div>
                 </div>
             `;
@@ -258,7 +256,11 @@
         function renderScoreButtons(field, options) {
             const dataKey = `${currentCategory}_${currentId}`;
             const currentVal = allData[dataKey][field];
-            return options.map(opt => `<button onclick="setScore('${field}', ${opt.v})" class="score-btn p-3 rounded-xl text-sm font-bold ${currentVal === opt.v ? 'active' : ''}">${opt.t}</button>`).join('');
+            return options.map(opt => `
+                <button onclick="setScore('${field}', ${opt.v})" class="score-btn p-3 text-xs font-bold ${currentVal === opt.v ? 'active' : ''}">
+                    ${opt.t}
+                </button>
+            `).join('');
         }
 
         function setScore(field, val) {
@@ -274,11 +276,12 @@
             const name = document.getElementById('assessorName').value || '未具名';
             let csv = "\uFEFF分類,樣品編號,評測者,外觀得分,口感得分,老化得分,總分,備註評語\n";
             Object.values(allData).forEach(d => {
+                const sApp = d.appearance ? scoreMapping.appearance[d.appearance] : 0;
+                const sTex = d.texture ? scoreMapping.texture[d.texture] : 0;
+                const sSta = d.staling ? scoreMapping.staling[d.staling] : 0;
+                const total = sApp + sTex + sSta;
                 if(d.appearance || d.texture || d.staling || d.comment) {
-                    const sApp = d.appearance ? scoreMapping.appearance[d.appearance] : 0;
-                    const sTex = d.texture ? scoreMapping.texture[d.texture] : 0;
-                    const sSta = d.staling ? scoreMapping.staling[d.staling] : 0;
-                    csv += `"${d.category}","${d.id}","${name}","${sApp}","${sTex}","${sSta}","${sApp+sTex+sSta}","${d.comment.replace(/"/g, '""')}"\n`;
+                    csv += `"${d.category}","${d.id}","${name}","${sApp}","${sTex}","${sSta}","${total}","${d.comment.replace(/"/g, '""')}"\n`;
                 }
             });
             return csv;
@@ -296,15 +299,14 @@
         function showStatus(msg, classes) {
             const el = document.getElementById('statusMsg');
             el.innerText = msg;
-            el.className = "p-4 rounded-xl text-sm font-bold " + classes;
+            el.className = "p-4 rounded-xl text-sm font-bold border " + classes;
             el.classList.remove('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
             setTimeout(() => el.classList.add('hidden'), 5000);
         }
 
         window.onload = () => switchCategory('細卷');
     </script>
-    
-    <!-- 將腳本加載放在 Body 最後，並確保 gisLoaded 已定義 -->
     <script src="https://accounts.google.com/gsi/client" async defer onload="window.gisLoaded()"></script>
 </body>
 </html>
