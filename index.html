@@ -334,24 +334,33 @@
         }
 
         async function uploadCSVToDrive({ csvContent, filename, assessor }) {
-            // 沒設定就不擋下載，只提示
             if (!DRIVE_WEBAPP_URL) {
                 alert('尚未設定 DRIVE_WEBAPP_URL，因此無法上傳到雲端硬碟。');
                 return;
             }
 
+            /**
+             * 重要：Apps Script Web App 常見會因為 CORS preflight (OPTIONS) 導致瀏覽器 fetch 顯示 Failed to fetch。
+             * 觸發原因通常是 Content-Type: application/json。
+             * 解法：改用「簡單請求」(simple request)，用 application/x-www-form-urlencoded 並不自行設定 headers。
+             */
+            const payload = {
+                token: UPLOAD_TOKEN,
+                filename,
+                assessor,
+                csv: csvContent
+            };
+
+            // 使用 URLSearchParams 送出，避免 preflight
+            const formBody = new URLSearchParams({ payload: JSON.stringify(payload) });
+
             try {
                 const res = await fetch(DRIVE_WEBAPP_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token: UPLOAD_TOKEN,
-                        filename,
-                        assessor,
-                        csv: csvContent
-                    })
+                    body: formBody
                 });
 
+                // 注意：若服務端回傳不是 JSON，這裡仍可讀 text 再 parse
                 const raw = await res.text();
                 let out;
                 try { out = JSON.parse(raw); } catch { out = { ok: false, message: raw }; }
@@ -360,7 +369,6 @@
                     throw new Error(out.message || 'Upload failed');
                 }
 
-                // 你希望「提交成功就好」：只保留成功提示
                 alert('提交成功');
             } catch (err) {
                 console.error(err);
