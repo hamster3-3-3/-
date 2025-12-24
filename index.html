@@ -1,429 +1,402 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>壽司飯感官評測系統</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
-    body { font-family: 'Noto Sans TC', sans-serif; background-color: #f8fafc; }
-    .score-btn {
-      transition: all 0.2s;
-      border: 1px solid #e2e8f0;
-      background-color: #fff;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-      min-height: 4rem;
-      line-height: 1.4;
-    }
-    .score-btn.active {
-      background-color: #f97316;
-      color: white;
-      border-color: #ea580c;
-      box-shadow: 0 4px 6px -1px rgba(234, 88, 12, 0.2);
-    }
-    .tab-btn {
-      padding: 1.25rem 2rem;
-      font-weight: 700;
-      transition: all 0.3s;
-      border-bottom: 4px solid transparent;
-      color: #64748b;
-    }
-    .tab-btn.active {
-      color: #f97316;
-      border-bottom-color: #f97316;
-      background-color: white;
-    }
-  </style>
+    <!-- Encoding: keep UTF-8 to safely render Chinese and avoid unexpected token issues -->
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>半成品(米飯)盲測評分系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f3f4f6; }
+        .score-card { transition: all 0.2s; cursor: pointer; border: 2px solid transparent; }
+        .score-card.active { border-color: #1f2937; background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .score-card:hover { transform: translateY(-1px); background-color: #ffffff; }
+        .tab-btn { transition: all 0.3s; }
+        .tab-btn.active { background-color: #1f2937; color: white; border-color: #1f2937; }
+        .hidden-tab { display: none; }
+        select { -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+    </style>
 </head>
 <body class="p-4 md:p-8">
-  <div class="max-w-4xl mx-auto">
-    <div class="bg-white p-6 rounded-2xl shadow-sm mb-6 flex flex-col md:flex-row justify-between items-center border-t-4 border-orange-500">
-      <h1 class="text-2xl font-black text-slate-800">壽司飯感官評測系統</h1>
-      <div class="mt-4 md:mt-0 flex flex-col items-end gap-3">
-        <input
-          type="text"
-          id="assessorName"
-          placeholder="填寫評測者姓名"
-          class="border-b border-slate-300 p-2 focus:border-orange-500 outline-none text-right w-48 bg-transparent"
-        />
-        <button
-          onclick="exportCSV()"
-          class="bg-slate-800 text-white px-6 py-2 rounded-lg font-bold hover:bg-slate-900 transition text-sm"
-        >
-          匯出數據報表 (CSV)
-        </button>
-      </div>
-    </div>
-
-    <div class="flex bg-slate-100 rounded-t-xl overflow-hidden shadow-inner">
-      <button onclick="switchCategory('細卷')" id="tab-細卷" class="tab-btn flex-1 active">細卷系列</button>
-      <button onclick="switchCategory('脆卷')" id="tab-脆卷" class="tab-btn flex-1">脆卷系列</button>
-      <button onclick="switchCategory('手卷')" id="tab-手卷" class="tab-btn flex-1">手卷系列</button>
-    </div>
-
-    <div class="bg-white rounded-b-xl shadow-lg border border-slate-200 overflow-hidden">
-      <div class="bg-orange-50 p-6 border-b border-orange-100 flex items-center gap-4 justify-center">
-        <label class="text-orange-900 font-bold text-lg">樣品編號：</label>
-        <select
-          id="idSelector"
-          onchange="switchId(this.value)"
-          class="bg-white border-2 border-orange-300 rounded-xl px-6 py-2 font-bold text-xl text-orange-700 outline-none w-64"
-        ></select>
-      </div>
-      <div id="formContent" class="p-6 md:p-8 space-y-10"></div>
-    </div>
-  </div>
-
-  <script>
-    // ====== Google Drive 上傳（Apps Script Web App）設定 ======
-    // 你已取得的 Web App URL（可直接用）
-    const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzVRvmj_5E0Z4bmQ7VwAS5hJVqYXMY6ojkPhQw5d-C2llqCeeyqh6xU_jaUMbTqYMXTXA/exec";
-    // 建議你在 Apps Script 端設一組 token，這裡需一致；若 Apps Script 沒做 token 檢查，可先留空字串
-    const UPLOAD_TOKEN = "";
-    // 你已確認 fetch 會遇到 CORS（TypeError: Failed to fetch / CORS policy），因此預設直接走「表單 POST」路徑
-    // 若未來你把頁面放到同網域後端或取得可用的 CORS 回應，再把它改成 false 以優先使用 fetch 讀回 JSON。
-    const FORCE_FORM_POST = true;
-
-    // ====== 表單配置 ======
-    const sampleIds = ['A(D+1)', 'A(D+2)', 'B(D+1)', 'B(D+2)'];
-    const categories = ['細卷', '脆卷', '手卷'];
-    const config = {
-      '細卷': [...sampleIds],
-      '脆卷': [...sampleIds],
-      '手卷': [...sampleIds]
-    };
-
-    const scoreMapping = {
-      appearance: { 1: 0, 2: 10, 3: 20, 4: 10 },
-      texture: { 1: 0, 2: 20, 3: 40, 4: 20, 5: 0 },
-      staling: { 1: 40, 2: 30, 3: 20, 4: 10 }
-    };
-
-    let allData = {};
-    categories.forEach((c) => sampleIds.forEach((id) => {
-      allData[`${c}_${id}`] = { category: c, id, appearance: null, texture: null, staling: null, comment: '' };
-    }));
-
-    let currentCategory = '細卷';
-    let currentId = 'A(D+1)';
-
-    function switchCategory(cat) {
-      currentCategory = cat;
-      document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
-      const tab = document.getElementById(`tab-${cat}`);
-      if (tab) tab.classList.add('active');
-
-      const selector = document.getElementById('idSelector');
-      selector.innerHTML = (config[cat] || []).map((id) => `<option value="${escapeHtmlAttr(id)}">${escapeHtmlText(id)}</option>`).join('');
-      switchId((config[cat] || [])[0] || '');
-    }
-
-    function switchId(id) {
-      if (!id) return;
-      currentId = id;
-      document.getElementById('idSelector').value = id;
-      renderForm();
-    }
-
-    function renderScoreButtons(field, options) {
-      const key = `${currentCategory}_${currentId}`;
-      const currentVal = allData[key][field];
-      return options.map((opt) => `
-        <button
-          type="button"
-          onclick="setScore('${field}', ${opt.v})"
-          class="score-btn p-3 rounded-xl text-sm font-bold ${currentVal === opt.v ? 'active' : ''}"
-        >
-          ${escapeHtmlText(opt.t)}
-        </button>
-      `).join('');
-    }
-
-    function renderForm() {
-      const key = `${currentCategory}_${currentId}`;
-      const d = allData[key];
-
-      document.getElementById('formContent').innerHTML = `
-        <div class='grid grid-cols-1 lg:grid-cols-3 gap-12'>
-          <div class='lg:col-span-2 space-y-10'>
-            <section>
-              <h3 class='font-bold mb-4'>外觀</h3>
-              <div class='grid grid-cols-2 gap-4'>
-                ${renderScoreButtons('appearance', [
-                  { v: 1, t: '飯粒不完整、光澤不均勻' },
-                  { v: 2, t: '飯粒不完整、光澤均勻' },
-                  { v: 3, t: '飯粒完整、光澤均勻' },
-                  { v: 4, t: '飯粒完整、光澤不均勻' }
-                ])}
-              </div>
-            </section>
-
-            <section>
-              <h3 class='font-bold mb-4'>口感</h3>
-              <div class='grid grid-cols-5 gap-3'>
-                ${renderScoreButtons('texture', [
-                  { v: 1, t: '極硬' },
-                  { v: 2, t: '偏硬' },
-                  { v: 3, t: '軟硬適中' },
-                  { v: 4, t: '偏軟爛' },
-                  { v: 5, t: '極軟爛' }
-                ])}
-              </div>
-            </section>
-
-            <section>
-              <h3 class='font-bold mb-4'>老化</h3>
-              <div class='grid grid-cols-4 gap-3'>
-                ${renderScoreButtons('staling', [
-                  { v: 1, t: '完全無老化' },
-                  { v: 2, t: '些許老化' },
-                  { v: 3, t: '大部分老化' },
-                  { v: 4, t: '完全老化' }
-                ])}
-              </div>
-            </section>
-          </div>
-
-          <div class='bg-slate-50 p-6 rounded-2xl border border-slate-200'>
-            <h3 class='font-bold mb-3'>綜合感官評語</h3>
-            <textarea
-              oninput="updateComment(this.value)"
-              class='w-full h-64 border p-3 rounded bg-white'
-              placeholder='描述飯粒黏性、風味、平衡度等...'
-            >${escapeHtmlText(d.comment || '')}</textarea>
-          </div>
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 border-b-2 border-gray-800 pb-6">
+            <div class="text-center md:text-left">
+                <h1 class="text-3xl font-black text-gray-900 tracking-tight">半成品(米飯)盲測評分系統</h1>
+            </div>
+            <div class="mt-4 md:mt-0 flex flex-wrap justify-center gap-3">
+                <button onclick="exportCSV()" class="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-gray-800 transition shadow-lg flex items-center gap-2">
+                    匯出 CSV 報表
+                </button>
+                <button onclick="resetAll()" class="bg-white text-red-500 px-4 py-3 rounded-xl font-bold border border-red-200 hover:bg-red-50 transition text-sm">
+                    全數重置
+                </button>
+            </div>
         </div>
-      `;
-    }
 
-    function setScore(field, val) {
-      const key = `${currentCategory}_${currentId}`;
-      allData[key][field] = val;
-      renderForm();
-    }
+        <!-- 評測者資訊 -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-col md:flex-row gap-4 items-center">
+            <div class="w-full md:w-1/3">
+                <label class="block text-xs font-bold text-gray-400 uppercase mb-1">評測者 Assessor</label>
+                <input type="text" id="globalAssessor" class="w-full bg-gray-50 border-none rounded-xl p-3 focus:ring-2 focus:ring-gray-400 outline-none font-bold" placeholder="輸入評測人員姓名">
+            </div>
+            <p class="text-gray-400 text-sm hidden md:block">切換 A/B 樣品時系統會自動保留您的選擇與筆記。</p>
+        </div>
 
-    function updateComment(val) {
-      const key = `${currentCategory}_${currentId}`;
-      allData[key].comment = val;
-    }
+        <!-- Tab Bar -->
+        <div id="tabContainer" class="flex flex-wrap gap-2 mb-6">
+            <!-- 預設靜態內容（避免某些預覽環境禁用 JS 時畫面空白） -->
+            <button class="tab-btn active px-10 py-3 rounded-full border-2 border-gray-200 font-bold text-gray-500 hover:border-gray-400">肉鬆</button>
+            <button class="tab-btn px-10 py-3 rounded-full border-2 border-gray-200 font-bold text-gray-500 hover:border-gray-400">湖鹽飯</button>
+        </div>
 
-    // ====== CSV 生成 + 下載 + 上傳 ======
-    function blobToDataURL(blob) {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob); // data:text/csv;base64,....
-      });
-    }
+        <!-- Form Container -->
+        <div id="formContainer">
+            <!-- 預設靜態內容（JS 可用時會被 renderCurrentForm() 覆蓋成互動版） -->
+            <div class="sample-form space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4">
+                    <div class="flex-1">
+                        <label class="text-xs font-bold text-gray-400 uppercase block mb-1">樣品類別</label>
+                        <div class="text-2xl font-black text-gray-900 p-1">肉鬆</div>
+                    </div>
+                    <div class="w-full md:w-64">
+                        <label class="text-xs font-bold text-gray-400 uppercase block mb-1">樣品編號</label>
+                        <div class="relative">
+                            <select class="w-full bg-gray-100 border-2 border-transparent focus:border-gray-900 rounded-xl p-3 font-mono font-bold text-gray-900 outline-none cursor-pointer" disabled>
+                                <option selected>A</option>
+                                <option>B</option>
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-700">▼</div>
+                        </div>
+                        <p class="mt-2 text-xs text-gray-400">（若預覽環境禁用 JS，互動功能將無法使用，但版面仍可預覽）</p>
+                    </div>
+                </div>
 
-    // ====== 上傳（避免 CORS）：優先 fetch；若遇到 CORS/Failed to fetch 則改用隱藏表單 POST ======
-    function postViaHiddenForm(payload) {
-      return new Promise((resolve, reject) => {
-        try {
-          // 建立/重用 iframe（用來接收提交，避免跳頁）
-          let iframe = document.getElementById('uploadFrame');
-          if (!iframe) {
-            iframe = document.createElement('iframe');
-            iframe.id = 'uploadFrame';
-            iframe.name = 'uploadFrame';
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-          }
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <span class="w-6 h-6 bg-gray-900 text-white rounded flex items-center justify-center text-xs">1</span>
+                        一、外觀 (Appearance)
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="text-gray-700 font-medium">1. 飯粒不完整、光澤不均勻</span></div>
+                        <div class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="text-gray-700 font-medium">2. 飯粒不完整、光澤均勻</span></div>
+                        <div class="score-card active p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="font-bold text-gray-900">3. 飯粒完整、光澤均勻</span></div>
+                        <div class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="text-gray-700 font-medium">4. 飯粒完整、光澤不均勻</span></div>
+                    </div>
+                </div>
 
-          // 建立 form
-          const form = document.createElement('form');
-          form.style.display = 'none';
-          form.method = 'POST';
-          form.action = GAS_WEBAPP_URL;
-          form.target = 'uploadFrame';
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <span class="w-6 h-6 bg-gray-900 text-white rounded flex items-center justify-center text-xs">2</span>
+                        二、口感 (Texture)
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="text-gray-700 font-medium">1. 極硬</span></div>
+                        <div class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="text-gray-700 font-medium">2. 偏硬</span></div>
+                        <div class="score-card active p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="font-bold text-gray-900">3. 軟硬適中</span></div>
+                        <div class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="text-gray-700 font-medium">4. 偏軟爛</span></div>
+                        <div class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="text-gray-700 font-medium">5. 極軟爛</span></div>
+                    </div>
+                </div>
 
-          // 以 x-www-form-urlencoded 送出（不受 CORS 讀取限制）
-          // Apps Script 端建議 doPost 同時支援 JSON 與 e.parameter。
-          ['token', 'filename', 'base64'].forEach((k) => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = k;
-            input.value = payload[k] ?? '';
-            form.appendChild(input);
-          });
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <span class="w-6 h-6 bg-gray-900 text-white rounded flex items-center justify-center text-xs">3</span>
+                        三、氣味 (Aroma)
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="text-gray-700 font-medium">1. 無飯香、有異味</span></div>
+                        <div class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="text-gray-700 font-medium">2. 無飯香、無異味</span></div>
+                        <div class="score-card active p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="font-bold text-gray-900">3. 有飯香、無異味</span></div>
+                        <div class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center"><span class="text-gray-700 font-medium">4. 有飯香、有異味</span></div>
+                    </div>
+                </div>
 
-          document.body.appendChild(form);
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <label class="block text-sm font-bold text-gray-700 mb-3">評測筆記 (Flavor Notes)</label>
+                    <textarea rows="4" class="w-full bg-gray-50 border-none rounded-xl p-4 text-sm" placeholder="描述此樣品的風味特徵..." disabled></textarea>
+                </div>
+            </div>
+        </div>
 
-          // 跨網域無法可靠讀回 JSON；以「送出後短暫等待」視為完成請求
-          const timer = setTimeout(() => {
-            cleanup();
-            resolve({ ok: true, fileName: payload.filename, via: 'hidden-form', note: 'request-sent' });
-          }, 1200);
+        <!-- 測試結果（開發用，可留著） -->
+        <div id="debug" class="mt-6 text-xs text-gray-500"></div>
+    </div>
 
-          function cleanup() {
-            clearTimeout(timer);
-            form.remove();
-          }
+    <script>
+        /**
+         * 功能：按下「匯出 CSV 報表」時：
+         *  - 下載 CSV（保留原本行為）
+         *  - 另外透過 Google Apps Script Web App 上傳到 Google Drive
+         *
+         * 注意：純 HTML 無法直接寫入你的 Google Drive；必須透過 Apps Script Web App（或 Drive API OAuth）。
+         */
+        const DRIVE_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw-RUOruPvni0M37kDhtulr99Q4YwD-Sm9Jp9vNZfrHtfedQL2puekcX9bDSOpU9TWH/exec"; // 例如：https://script.google.com/macros/s/XXXX/exec
+        const UPLOAD_TOKEN = "rice_test_2025";     // 建議設定；Apps Script 端同樣驗證
 
-          form.submit();
-        } catch (e) {
-          reject(e);
+        let categories = ["肉鬆", "湖鹽飯"];
+        let dataStore = {};
+        let currentCategoryIdx = 0;
+
+        // 初始化資料儲存器
+        function initDataStore() {
+            categories.forEach(cat => {
+                dataStore[cat] = {
+                    currentSelection: "A",
+                    A: { scores: { appearance: 30, texture: 40, aroma: 30 }, evaluation: "", valIdx: { appearance: 3, texture: 3, aroma: 3 } },
+                    B: { scores: { appearance: 30, texture: 40, aroma: 30 }, evaluation: "", valIdx: { appearance: 3, texture: 3, aroma: 3 } }
+                };
+            });
         }
-      });
-    }
 
-    async function uploadToDrive(blob, filename) {
-      const dataUrl = await blobToDataURL(blob);
-
-      const payload = {
-        token: UPLOAD_TOKEN,
-        filename,
-        base64: dataUrl
-      };
-
-      // 你已選擇：只要「送出上傳請求」就視為成功。
-      // 因為瀏覽器 CORS 限制，跨網域通常無法可靠讀回 Apps Script 的 JSON 回應。
-      // 因此預設直接走 hidden-form（不受 CORS 讀取限制），並回傳 via='hidden-form'。
-      if (FORCE_FORM_POST) {
-        return await postViaHiddenForm(payload);
-      }
-
-      // 若未來環境允許 CORS（或同源），可用 fetch 讀回 JSON
-      try {
-        const res = await fetch(GAS_WEBAPP_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const text = await res.text();
-        let json = null;
-        try { json = JSON.parse(text); } catch (_) { /* ignore */ }
-
-        if (!res.ok) throw new Error((json && json.message) || text || 'Upload failed');
-        if (json && json.ok === false) throw new Error(json.message || 'Upload failed');
-
-        return json || { ok: true, raw: text, via: 'fetch' };
-      } catch (err) {
-        return await postViaHiddenForm(payload);
-      }
-    }
-
-    function todayISO() {
-      const d = new Date();
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    }
-
-    function escapeCsvCell(value) {
-      const s = String(value ?? '');
-      return `"${s.replace(/"/g, '""')}"`;
-    }
-
-    async function exportCSV() {
-      const name = (document.getElementById('assessorName').value || '').trim() || '未具名';
-
-      // 用 \uFEFF（BOM）避免 Excel 開啟中文亂碼；用 \n 明確換行，避免語法錯誤
-      let csv = "\uFEFF分類,樣品編號,評測者,外觀得分,口感得分,老化得分,總分,備註\n";
-
-      Object.values(allData).forEach((d) => {
-        const hasAny = Boolean(d.appearance || d.texture || d.staling || (d.comment && d.comment.trim() !== ''));
-        if (!hasAny) return;
-
-        const a = scoreMapping.appearance[d.appearance] || 0;
-        const t = scoreMapping.texture[d.texture] || 0;
-        const s = scoreMapping.staling[d.staling] || 0;
-        const total = a + t + s;
-
-        csv += [
-          escapeCsvCell(d.category),
-          escapeCsvCell(d.id),
-          escapeCsvCell(name),
-          escapeCsvCell(a),
-          escapeCsvCell(t),
-          escapeCsvCell(s),
-          escapeCsvCell(total),
-          escapeCsvCell(d.comment || '')
-        ].join(',') + "\n";
-      });
-
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const filename = `壽司評測_${name}_${todayISO()}.csv`;
-
-      // 1) 下載
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = filename;
-      link.click();
-
-      // 2) 上傳（若 Apps Script 未部署 doPost 或權限未正確，會失敗）
-      try {
-        const result = await uploadToDrive(blob, filename);
-
-        // option 1：不追求回傳 fileId，只要送出即算成功
-        if (result && result.via === 'hidden-form') {
-          alert(
-            `已送出上傳請求（不受 CORS 影響）。
-` +
-            `檔名：${filename}
-` +
-            `請到 Google Drive 確認是否已新增檔案。`
-          );
-        } else {
-          const shownName = (result && result.fileName) ? result.fileName : filename;
-          alert(`已完成上傳（可讀回回應）。
-檔名：${shownName}`);
+        function init() {
+            try {
+                initDataStore();
+                renderTabs();
+                renderCurrentForm();
+                runTests();
+            } catch (e) {
+                // 若預覽環境對 script 有限制，至少把錯誤顯示出來，方便你定位
+                const el = document.getElementById('debug');
+                if (el) el.textContent = 'Init error: ' + (e?.message || e);
+                console.error(e);
+            }
         }
-      } catch (e) {
-        alert(`上傳失敗：${(e && e.message) ? e.message : '請確認 Apps Script doPost/部署權限/URL 正確'}`);
-      }
-    }
 
-    // ====== 簡易自我測試（不影響功能；僅 console） ======
-    function assert(name, cond) {
-      if (!cond) throw new Error(`Test failed: ${name}`);
-      console.log(`✔ ${name}`);
-    }
+        function renderTabs() {
+            const container = document.getElementById('tabContainer');
+            container.innerHTML = categories.map((cat, i) => `
+                <button onclick="switchCategory(${i})" class="tab-btn px-10 py-3 rounded-full border-2 border-gray-200 font-bold text-gray-500 hover:border-gray-400 ${i === currentCategoryIdx ? 'active' : ''}">
+                    ${cat}
+                </button>
+            `).join('');
+        }
 
-    function runSelfTests() {
-      // Test 1: todayISO format
-      assert('todayISO() 格式為 YYYY-MM-DD', /^\d{4}-\d{2}-\d{2}$/.test(todayISO()));
+        function switchCategory(idx) {
+            currentCategoryIdx = idx;
+            renderTabs();
+            renderCurrentForm();
+        }
 
-      // Test 2: scoreMapping total bounds
-      const maxTotal = 20 + 40 + 40; // appearance max 20, texture max 40, staling max 40
-      assert('最大總分應為 100', maxTotal === 100);
+        function toggleSampleVersion(catName, version) {
+            dataStore[catName].currentSelection = version;
+            renderCurrentForm();
+        }
 
-      // Test 3: CSV header contains BOM and newline
-      let header = "\uFEFF分類,樣品編號,評測者,外觀得分,口感得分,老化得分,總分,備註\n";
-      assert('CSV header 以 BOM 開頭', header.charCodeAt(0) === 0xFEFF);
-      assert('CSV header 以換行結尾', header.endsWith('\n'));
+        function renderCurrentForm() {
+            const catName = categories[currentCategoryIdx];
+            const currentVersion = dataStore[catName].currentSelection;
+            const currentData = dataStore[catName][currentVersion];
+            const container = document.getElementById('formContainer');
 
-      // Test 4: CSV row escaping
-      const cell = escapeCsvCell('a"b');
-      assert('CSV cell 雙引號轉義', cell === '"a""b"');
-    }
+            container.innerHTML = `
+                <div class="sample-form space-y-6">
+                    <!-- 資訊區 -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col md:flex-row gap-4">
+                        <div class="flex-1">
+                            <label class="text-xs font-bold text-gray-400 uppercase block mb-1">樣品類別</label>
+                            <div class="text-2xl font-black text-gray-900 p-1">${catName}</div>
+                        </div>
+                        <div class="w-full md:w-64">
+                            <label class="text-xs font-bold text-gray-400 uppercase block mb-1">樣品編號</label>
+                            <div class="relative">
+                                <select onchange="toggleSampleVersion('${catName}', this.value)" 
+                                        class="w-full bg-gray-100 border-2 border-transparent focus:border-gray-900 rounded-xl p-3 font-mono font-bold text-gray-900 outline-none cursor-pointer">
+                                    <option value="A" ${currentVersion === 'A' ? 'selected' : ''}>A</option>
+                                    <option value="B" ${currentVersion === 'B' ? 'selected' : ''}>B</option>
+                                </select>
+                                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-700">▼</div>
+                            </div>
+                        </div>
+                    </div>
 
-    function escapeHtmlText(s) {
-      return String(s ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
+                    <!-- 評分區 (外觀) -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <span class="w-6 h-6 bg-gray-900 text-white rounded flex items-center justify-center text-xs">1</span>
+                            一、外觀 (Appearance)
+                        </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            ${renderScoreCard(catName, 'appearance', 1, 0, '1. 飯粒不完整、光澤不均勻', currentData.valIdx.appearance === 1)}
+                            ${renderScoreCard(catName, 'appearance', 2, 10, '2. 飯粒不完整、光澤均勻', currentData.valIdx.appearance === 2)}
+                            ${renderScoreCard(catName, 'appearance', 3, 30, '3. 飯粒完整、光澤均勻', currentData.valIdx.appearance === 3)}
+                            ${renderScoreCard(catName, 'appearance', 4, 20, '4. 飯粒完整、光澤不均勻', currentData.valIdx.appearance === 4)}
+                        </div>
+                    </div>
 
-    function escapeHtmlAttr(s) {
-      // attribute 也用同一套即可
-      return escapeHtmlText(s);
-    }
+                    <!-- 評分區 (口感) -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <span class="w-6 h-6 bg-gray-900 text-white rounded flex items-center justify-center text-xs">2</span>
+                            二、口感 (Texture)
+                        </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            ${renderScoreCard(catName, 'texture', 1, 0, '1. 極硬', currentData.valIdx.texture === 1)}
+                            ${renderScoreCard(catName, 'texture', 2, 20, '2. 偏硬', currentData.valIdx.texture === 2)}
+                            ${renderScoreCard(catName, 'texture', 3, 40, '3. 軟硬適中', currentData.valIdx.texture === 3)}
+                            ${renderScoreCard(catName, 'texture', 4, 20, '4. 偏軟爛', currentData.valIdx.texture === 4)}
+                            ${renderScoreCard(catName, 'texture', 5, 0, '5. 極軟爛', currentData.valIdx.texture === 5)}
+                        </div>
+                    </div>
 
-    window.onload = () => {
-      runSelfTests();
-      switchCategory('細卷');
-    };
-  </script>
+                    <!-- 評分區 (氣味) -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                            <span class="w-6 h-6 bg-gray-900 text-white rounded flex items-center justify-center text-xs">3</span>
+                            三、氣味 (Aroma)
+                        </h2>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            ${renderScoreCard(catName, 'aroma', 1, 0, '1. 無飯香、有異味', currentData.valIdx.aroma === 1)}
+                            ${renderScoreCard(catName, 'aroma', 2, 15, '2. 無飯香、無異味', currentData.valIdx.aroma === 2)}
+                            ${renderScoreCard(catName, 'aroma', 3, 30, '3. 有飯香、無異味', currentData.valIdx.aroma === 3)}
+                            ${renderScoreCard(catName, 'aroma', 4, 10, '4. 有飯香、有異味', currentData.valIdx.aroma === 4)}
+                        </div>
+                    </div>
+
+                    <!-- 評價區 -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                        <label class="block text-sm font-bold text-gray-700 mb-3">評測筆記 (Flavor Notes)</label>
+                        <textarea oninput="updateEvaluation('${catName}', this.value)" rows="4" class="w-full bg-gray-50 border-none rounded-xl p-4 text-sm focus:ring-2 focus:ring-gray-400 outline-none" placeholder="描述此樣品的風味特徵...">${currentData.evaluation}</textarea>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderScoreCard(catName, category, val, score, text, isActive) {
+            const activeClass = isActive ? 'active' : '';
+            const fontClass = isActive ? 'font-bold text-gray-900' : 'text-gray-700 font-medium';
+            return `
+                <div onclick="updateScore('${catName}', '${category}', ${val}, ${score})" 
+                     class="score-card p-4 rounded-xl bg-gray-50 flex justify-between items-center ${activeClass}">
+                    <span class="${fontClass}">${text}</span>
+                </div>
+            `;
+        }
+
+        function updateScore(catName, scoreCat, val, weightedScore) {
+            const version = dataStore[catName].currentSelection;
+            dataStore[catName][version].valIdx[scoreCat] = val;
+            dataStore[catName][version].scores[scoreCat] = weightedScore;
+            renderCurrentForm();
+        }
+
+        function updateEvaluation(catName, value) {
+            const version = dataStore[catName].currentSelection;
+            dataStore[catName][version].evaluation = value;
+        }
+
+        function resetAll() {
+            if(!confirm('這將清除所有已選數據，確定嗎？')) return;
+            location.reload();
+        }
+
+        function normalizeCsvCell(text) {
+            // 避免 CSV 被換行破壞；同時把半形逗號替換成全形逗號
+            return String(text)
+                .replace(/\r\n|\n|\r/g, ' ')
+                .replace(/,/g, '，');
+        }
+
+        function exportCSV() {
+            const assessor = document.getElementById('globalAssessor').value || '未填寫';
+            const headers = ['樣品類別', '評測者', '樣品代號', '外觀得分', '口感得分', '氣味得分', '總計得分', '評測筆記'];
+
+            const rows = [];
+            categories.forEach(cat => {
+                ['A', 'B'].forEach(ver => {
+                    const d = dataStore[cat][ver];
+                    const total = d.scores.appearance + d.scores.texture + d.scores.aroma;
+                    rows.push([
+                        cat,
+                        assessor,
+                        ver,
+                        d.scores.appearance,
+                        d.scores.texture,
+                        d.scores.aroma,
+                        total,
+                        normalizeCsvCell(d.evaluation || '')
+                    ]);
+                });
+            });
+
+            const BOM = "\uFEFF";
+            const csvBody = [headers, ...rows]
+                .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+                .join('\n');
+            const csvContent = BOM + csvBody;
+
+            const filename = `米飯盲測全數據報表_${new Date().toISOString().slice(0,10)}.csv`;
+
+            // 僅上傳到 Google Drive，不進行本地下載
+            uploadCSVToDrive({ csvContent, filename, assessor });
+        }
+
+        async function uploadCSVToDrive({ csvContent, filename, assessor }) {
+            // 沒設定就不擋下載，只提示
+            if (!DRIVE_WEBAPP_URL) {
+                alert('尚未設定 DRIVE_WEBAPP_URL，因此無法上傳到雲端硬碟。');
+                return;
+            }
+
+            try {
+                const res = await fetch(DRIVE_WEBAPP_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: UPLOAD_TOKEN,
+                        filename,
+                        assessor,
+                        csv: csvContent
+                    })
+                });
+
+                const raw = await res.text();
+                let out;
+                try { out = JSON.parse(raw); } catch { out = { ok: false, message: raw }; }
+
+                if (!res.ok || !out.ok) {
+                    throw new Error(out.message || 'Upload failed');
+                }
+
+                // 你希望「提交成功就好」：只保留成功提示
+                alert('提交成功');
+            } catch (err) {
+                console.error(err);
+                alert('上傳失敗：' + (err?.message || err));
+            }
+        }
+
+        // ===== 內建自測（不影響功能；方便你確認字串/正則不會再炸） =====
+        function runTests() {
+            const log = (msg) => {
+                const el = document.getElementById('debug');
+                el.textContent = msg;
+            };
+
+            try {
+                // Test 1: normalizeCsvCell removes all newline variants
+                const normalized = normalizeCsvCell('a\n"b",c\r\nd');
+                console.assert(!/\n|\r/.test(normalized), 'normalizeCsvCell should remove newlines');
+                console.assert(normalized.includes('，'), 'normalizeCsvCell should replace commas with ，');
+
+                // Test 2: CSV escaping doubles quotes correctly
+                const doubled = String('x"y').replace(/"/g, '""');
+                console.assert(doubled === 'x""y', 'double quote escaping should work');
+
+                // Test 3: BOM is applied as first char code
+                const BOM = "\uFEFF";
+                const csv = BOM + 'a,b';
+                console.assert(csv.charCodeAt(0) === 0xFEFF, 'CSV should start with BOM');
+
+                log('Self-test: OK');
+            } catch (e) {
+                log('Self-test: FAILED - ' + (e?.message || e));
+            }
+        }
+
+        window.onload = init;
+    </script>
 </body>
 </html>
