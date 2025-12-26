@@ -854,16 +854,17 @@
             const csvRows = data.map(row => {
                 return headerArray.map(header => {
                     let value = row[header] === undefined ? '' : String(row[header]);
-                    value = value.replace(/\\n/g, ' ').replace(/"/g, '""');
+                    value = value.replace(/\n/g, ' ').replace(/"/g, '""');
                     return `"${value}"`;
                 }).join(',');
-            }).join('\\n');
+            }).join('\n');
 
-            return csvHeader + '\\n' + csvRows;
+            return csvHeader + '\n' + csvRows;
         }
 
+        // 原本保留的下載函式（若你未來要用，先不刪）
         function downloadCSV(csvString, filename) {
-            const BOM = '\\uFEFF';
+            const BOM = '\uFEFF';
             const blob = new Blob([BOM + csvString], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             if (link.download !== undefined) {
@@ -877,6 +878,7 @@
             }
         }
 
+        // ✅ 上傳（避免 Failed to fetch / CORS）：使用 no-cors + text/plain
         async function handleSubmission() {
             const forms = document.querySelectorAll('.tracking-form-instance');
             const allFormData = [];
@@ -919,7 +921,7 @@
                 allFormData.push(data);
             });
 
-            // 2) 產生 CSV（沿用 convertToCSV）
+            // 2) 產生 CSV
             const csvContent = convertToCSV(allFormData);
 
             // 3) 檔名：優先用第一筆會議日期（YYYYMMDD），否則用今日
@@ -947,9 +949,11 @@
             if (btn) { btn.disabled = true; btn.textContent = "上傳中..."; }
 
             try {
-                const resp = await fetch(GAS_WEBAPP_URL, {
+                // no-cors 會回傳 opaque response，但可避免 CORS preflight 導致 Failed to fetch
+                await fetch(GAS_WEBAPP_URL, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    mode: "no-cors",
+                    headers: { "Content-Type": "text/plain;charset=utf-8" },
                     body: JSON.stringify({
                         token: GAS_TOKEN,
                         filename,
@@ -957,22 +961,16 @@
                     })
                 });
 
-                const result = await resp.json().catch(() => ({}));
+                alert("已送出上傳請求。請到 Google Drive 目標資料夾確認檔案是否已新增。");
 
-                if (!resp.ok || !result.ok) {
-                    throw new Error(result.message || ("HTTP " + resp.status));
-                }
-
-                alert(`上傳成功：${result.fileName}`);
-
-                // 6) 顯示連結/內容（沿用 output-section 區塊）
+                // 6) 顯示 CSV 內容（不含連結，因為 no-cors 無法讀取回傳）
                 const outputSection = document.getElementById('output-section');
                 const formOutput = document.getElementById('form-output');
                 const formCountOutput = document.getElementById('form-count-output');
 
                 if (formCountOutput) formCountOutput.textContent = allFormData.length;
 
-                const text = `Drive 檔案連結：${result.fileUrl}\n\n` + csvContent;
+                const text = "（已送出上傳請求；此模式因 CORS 限制無法顯示 Drive 連結）\n\n" + csvContent;
                 if (formOutput) formOutput.textContent = text;
 
                 if (outputSection) {
