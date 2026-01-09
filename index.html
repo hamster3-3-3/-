@@ -110,6 +110,7 @@
       </div>
       <div class="flex items-center gap-2">
         <button id="importPdfBtnHeader" class="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-slate-50">匯入排關圖</button>
+        <button id="driveImportBtn" class="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-slate-50">從雲端匯入</button>
         <button id="exportBtn"
                 class="rounded-xl bg-orange-500 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-400">
           下載 PPT
@@ -428,6 +429,193 @@
       modal.classList.add('hidden');
       try { frame.src = 'about:blank'; } catch (e) {}
       document.body.classList.remove('overflow-hidden');
+    }
+
+    // ---------------- Google Drive（特定資料夾）匯入：Apps Script Web App 方案 ----------------
+    // 固定資料夾 ID（由你提供）
+    const DRIVE_FOLDER_ID = '1aHrHqApa_PwLQWW5DzhDC5oRts1BKi4G';
+
+    // 小組用存取 token（請自行改成較長字串，並僅分享給同部門成員）
+    // 若你們部署 Web App 設為「同機構使用者」，也可不填 token（但仍建議保留）
+    const DRIVE_IMPORT_TOKEN = 'CHANGE_ME_TO_A_LONG_RANDOM_TOKEN';
+
+    function hasAppsScriptBridge() {
+      return !!(window.google && google.script && google.script.run);
+    }
+
+    function openDriveModal() {
+      $('#driveFolderIdText').textContent = DRIVE_FOLDER_ID;
+      $('#driveCountText').textContent = '0';
+      $('#driveSearch').value = '';
+      $('#driveList').innerHTML = '';
+      $('#driveModal').classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+      loadDriveList();
+    }
+
+    function closeDriveModal() {
+      $('#driveModal').classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    function formatBytes(n) {
+      const num = Number(n || 0);
+      if (!num) return '—';
+      const units = ['B','KB','MB','GB'];
+      let i = 0, v = num;
+      while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+      return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString();
+      } catch (e) {
+        return iso;
+      }
+    }
+
+    let driveCache = []; // [{id,name,sizeBytes,updatedAt,productName}]
+
+    function escapeHtml(s) {
+      return String(s || '')
+        .replaceAll('&','&amp;')
+        .replaceAll('<','&lt;')
+        .replaceAll('>','&gt;')
+        .replaceAll('"','&quot;')
+        .replaceAll("'","&#39;");
+    }
+
+    function renderDriveList(items) {
+      const list = $('#driveList');
+      list.innerHTML = '';
+      const q = ($('#driveSearch').value || '').trim().toLowerCase();
+
+      const filtered = (items || []).filter(it => {
+        if (!q) return true;
+        return (it.name || '').toLowerCase().includes(q) || (it.productName || '').toLowerCase().includes(q);
+      });
+
+      $('#driveCountText').textContent = String(filtered.length);
+
+      if (filtered.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'p-4 text-sm text-slate-600';
+        empty.textContent = '此資料夾目前沒有可用的 PDF（或搜尋條件無結果）。';
+        list.appendChild(empty);
+        return;
+      }
+
+      filtered.forEach((it) => {
+        const row = document.createElement('label');
+        row.className = 'grid grid-cols-12 items-center gap-2 px-3 py-2 border-t hover:bg-slate-50 cursor-pointer';
+        row.innerHTML = `
+          <div class="col-span-1"><input type="checkbox" class="driveChk rounded" data-id="${it.id}"></div>
+          <div class="col-span-7">
+            <div class="text-sm font-semibold text-slate-800 break-words">${escapeHtml(it.productName || it.name)}</div>
+            <div class="text-xs text-slate-500 break-words">${escapeHtml(it.name || '')}</div>
+          </div>
+          <div class="col-span-2 text-xs text-slate-600">${escapeHtml(formatBytes(it.sizeBytes))}</div>
+          <div class="col-span-2 text-xs text-slate-600">${escapeHtml(formatDate(it.updatedAt))}</div>
+        `;
+        list.appendChild(row);
+      });
+    }
+
+    async function loadDriveList() {
+      $('#driveHint').classList.remove('text-rose-600');
+      $('#driveHint').classList.add('text-slate-500');
+
+      if (!hasAppsScriptBridge()) {
+        $('#driveHint').textContent = '此頁面目前不是 Apps Script Web App 環境，無法直接從 Google Drive 讀取資料夾。請依部署指南將本頁部署到 Apps Script 後再使用此功能。';
+        $('#driveHint').classList.add('text-rose-600');
+        driveCache = [];
+        renderDriveList(driveCache);
+        return;
+      }
+
+      $('#driveHint').textContent = '載入中…';
+      try {
+        await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (!res || !res.ok) {
+                reject(new Error((res && res.message) || 'Load failed'));
+                return;
+              }
+              driveCache = res.items || [];
+              resolve();
+            })
+            .withFailureHandler((err) => reject(err))
+            .listFolderPdfs({ folderId: DRIVE_FOLDER_ID, token: DRIVE_IMPORT_TOKEN });
+        });
+
+        $('#driveHint').textContent = '已載入資料夾清單，請勾選要匯入的 PDF。';
+        renderDriveList(driveCache);
+      } catch (e) {
+        console.error(e);
+        $('#driveHint').textContent = '載入失敗：' + (e && e.message ? e.message : String(e));
+        $('#driveHint').classList.add('text-rose-600');
+        driveCache = [];
+        renderDriveList(driveCache);
+      }
+    }
+
+    function base64ToUint8Array(base64) {
+      const raw = atob((base64 || '').replace(/\s+/g,''));
+      const out = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+      return out;
+    }
+
+    async function importSelectedFromDrive() {
+      const checks = Array.from(document.querySelectorAll('.driveChk')).filter(c => c.checked);
+      if (checks.length === 0) {
+        alert('請先勾選要匯入的 PDF。');
+        return;
+      }
+      if (!hasAppsScriptBridge()) {
+        alert('此功能需要部署為 Apps Script Web App。');
+        return;
+      }
+
+      $('#driveImportSelectedBtn').disabled = true;
+      $('#driveImportSelectedBtn').textContent = '匯入中…';
+
+      try {
+        const ids = checks.map(c => c.getAttribute('data-id')).filter(Boolean);
+
+        const files = [];
+        for (const id of ids) {
+          // eslint-disable-next-line no-await-in-loop
+          const res = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getPdfFile({ fileId: id, token: DRIVE_IMPORT_TOKEN });
+          });
+
+          if (!res || !res.ok) {
+            throw new Error((res && res.message) || 'Download failed');
+          }
+
+          const bytes = base64ToUint8Array(res.base64 || '');
+          const blob = new Blob([bytes], { type: 'application/pdf' });
+          const file = new File([blob], res.name || ('drive_' + id + '.pdf'), { type: 'application/pdf' });
+          files.push(file);
+        }
+
+        await importPdfFiles(files);
+        closeDriveModal();
+      } catch (e) {
+        console.error(e);
+        alert('匯入失敗：' + (e && e.message ? e.message : String(e)));
+      } finally {
+        $('#driveImportSelectedBtn').disabled = false;
+        $('#driveImportSelectedBtn').textContent = '匯入已勾選';
+      }
     }
 
 
@@ -1105,6 +1293,31 @@ const t1 = TPL.t1;
     $('#addRowBtn').addEventListener('click', () => addForm());
     $('#exportBtn').addEventListener('click', exportPPT);
 
+    // Drive import (Apps Script Web App)
+    const driveBtn = document.getElementById('driveImportBtn');
+    if (driveBtn) driveBtn.addEventListener('click', openDriveModal);
+
+    const closeDriveBtn = document.getElementById('closeDriveBtn');
+    if (closeDriveBtn) closeDriveBtn.addEventListener('click', closeDriveModal);
+
+    const driveModal = document.getElementById('driveModal');
+    if (driveModal) {
+      driveModal.addEventListener('click', (e) => {
+        const t = e.target;
+        if (t && t.dataset && t.dataset.closeDrive === 'true') closeDriveModal();
+      });
+    }
+
+    const driveRefreshBtn = document.getElementById('driveRefreshBtn');
+    if (driveRefreshBtn) driveRefreshBtn.addEventListener('click', loadDriveList);
+
+    const driveSearch = document.getElementById('driveSearch');
+    if (driveSearch) driveSearch.addEventListener('input', () => renderDriveList(driveCache));
+
+    const driveImportSelectedBtn = document.getElementById('driveImportSelectedBtn');
+    if (driveImportSelectedBtn) driveImportSelectedBtn.addEventListener('click', importSelectedFromDrive);
+
+
 
     // PDF import buttons
     const pdfInputEl = document.getElementById('pdfInput');
@@ -1162,7 +1375,7 @@ const t1 = TPL.t1;
       if (t && t.dataset && t.dataset.close === 'true') closeCatalog();
     });
 
-    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCatalog(); closePdfModal(); } });
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCatalog(); closePdfModal(); closeDriveModal(); } });
 
     window.addEventListener('resize', schedulePositionCatalogBtn);
     window.addEventListener('scroll', schedulePositionCatalogBtn, { passive: true });
@@ -1195,6 +1408,51 @@ const t1 = TPL.t1;
           </div>
 
           <iframe id="pdfFrame" class="hidden w-full h-[75vh] rounded-xl border" title="排關圖 PDF"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Drive modal (從雲端匯入排關圖) -->
+  <div id="driveModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/40" data-close-drive="true"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-3">
+      <div class="w-full max-w-5xl rounded-2xl bg-white shadow-xl overflow-hidden">
+        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b">
+          <div class="min-w-0">
+            <div class="text-sm font-semibold">從 Google Drive 資料夾匯入排關圖</div>
+            <div class="text-xs text-slate-500">
+              資料夾：<span class="font-mono" id="driveFolderIdText">—</span>
+              <span class="mx-2">•</span>
+              已載入：<span id="driveCountText">0</span> 份 PDF
+            </div>
+          </div>
+          <button id="closeDriveBtn" class="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">關閉</button>
+        </div>
+
+        <div class="p-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="relative flex-1 min-w-[220px]">
+              <input id="driveSearch" class="w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring" placeholder="搜尋商品名 / 檔名（輸入關鍵字）" />
+            </div>
+            <button id="driveRefreshBtn" class="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-slate-50">重新載入</button>
+            <button id="driveImportSelectedBtn" class="rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700">匯入已勾選</button>
+          </div>
+
+          <div id="driveHint" class="mt-3 text-xs text-slate-500">
+            提示：此功能需要將本頁部署為 Apps Script Web App（同部門少數人存取）。若你以本機 HTML 開啟，會無法直接連到 Drive。
+          </div>
+
+          <div class="mt-3 rounded-2xl border overflow-hidden">
+            <div class="grid grid-cols-12 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
+              <div class="col-span-1">選取</div>
+              <div class="col-span-7">檔名 / 商品名（解析）</div>
+              <div class="col-span-2">大小</div>
+              <div class="col-span-2">更新時間</div>
+            </div>
+            <div id="driveList" class="max-h-[60vh] overflow-auto"></div>
+          </div>
         </div>
       </div>
     </div>
