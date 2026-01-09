@@ -191,7 +191,10 @@
         <label class="md:col-span-8">
           <span class="text-xs font-semibold text-slate-600">商品名</span>
           <div class="mt-1 flex items-center gap-2">
-            <input class="nameInput flex-1 w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring" placeholder="" />
+            <div class="relative flex-1">
+              <input class="nameInput w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring" placeholder="" autocomplete="off" />
+              <div class="suggestBox hidden absolute left-0 right-0 mt-1 rounded-xl border bg-white shadow-lg overflow-hidden z-20"></div>
+            </div>
             <button type="button" class="showPdfBtn shrink-0 rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-slate-50">
               顯示排關圖
             </button>
@@ -326,6 +329,73 @@
         if (k && key && (k.includes(key) || key.includes(k))) return v;
       }
       return null;
+    }
+
+    
+    // Suggestions: list imported PDF product names and provide substring matching
+    function allImportedProductNames() {
+      const out = [];
+      const seen = new Set();
+      for (const v of pdfStore.values()) {
+        const name = (v && v.displayName) ? String(v.displayName).trim() : '';
+        if (!name) continue;
+        if (seen.has(name)) continue;
+        seen.add(name);
+        out.push(name);
+      }
+      return out;
+    }
+
+    function suggestProductNames(query, limit = 8) {
+      const q = (query || '').toString().trim();
+      if (!q) return [];
+      const names = allImportedProductNames();
+
+      // Substring match (case-insensitive for Latin, neutral for CJK)
+      const qLower = q.toLowerCase();
+      const hits = names.filter(n => n.toLowerCase().includes(qLower));
+
+      // Prefer prefix hits first, then other substring hits
+      hits.sort((a, b) => {
+        const ap = a.toLowerCase().startsWith(qLower) ? 0 : 1;
+        const bp = b.toLowerCase().startsWith(qLower) ? 0 : 1;
+        if (ap !== bp) return ap - bp;
+        return a.length - b.length;
+      });
+
+      return hits.slice(0, limit);
+    }
+
+    function renderSuggestBox(boxEl, items, onPick) {
+      if (!boxEl) return;
+      boxEl.innerHTML = '';
+
+      if (!items || items.length === 0) {
+        boxEl.classList.add('hidden');
+        return;
+      }
+
+      items.forEach((name) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-full text-left px-3 py-2 text-sm hover:bg-slate-50';
+        btn.textContent = name;
+
+        // Use mousedown to avoid blur closing before click
+        btn.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          onPick && onPick(name);
+        });
+
+        boxEl.appendChild(btn);
+      });
+
+      boxEl.classList.remove('hidden');
+    }
+
+    function hideSuggestBox(boxEl) {
+      if (!boxEl) return;
+      boxEl.classList.add('hidden');
     }
 
     function openPdfModal(productName, pdfItem) {
@@ -523,6 +593,7 @@
 
         const typeInput = $('.typeInput', panel);
         const nameInput = $('.nameInput', panel);
+        const suggestBox = panel.querySelector('.suggestBox');
         const descInput = $('.descInput', panel);
 
         const imgInput = $('.imgInput', panel);
@@ -546,8 +617,35 @@
 
         nameInput.addEventListener('input', (e) => {
           setRecord({ name: e.target.value || '' });
+
+        nameInput.addEventListener('focus', () => {
+          const hits = suggestProductNames(nameInput.value || '', 8);
+          renderSuggestBox(suggestBox, hits, (picked) => {
+            nameInput.value = picked;
+            setRecord({ name: picked });
+            updateTabLabel(idx);
+            updatePanelTitle(panel, idx);
+            hideSuggestBox(suggestBox);
+          });
+        });
+
+        nameInput.addEventListener('blur', () => {
+          // Delay so mousedown on an item can run first
+          setTimeout(() => hideSuggestBox(suggestBox), 150);
+        });
+
           updateTabLabel(idx);
           updatePanelTitle(panel, idx);
+
+          // Substring suggestions from imported 排關圖
+          const hits = suggestProductNames(e.target.value || '', 8);
+          renderSuggestBox(suggestBox, hits, (picked) => {
+            nameInput.value = picked;
+            setRecord({ name: picked });
+            updateTabLabel(idx);
+            updatePanelTitle(panel, idx);
+            hideSuggestBox(suggestBox);
+          });
         });
 
         descInput.addEventListener('input', (e) => setRecord({ desc: e.target.value || '' }));
