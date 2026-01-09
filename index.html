@@ -1,31 +1,127 @@
-<!-- GitHub Pages 專用：雲端匯入（JSONP，不會被 CORS 擋） -->
-<script>
-  // 你的 Apps Script Web App（/exec）
-  var DRIVE_LIST_API = 'https://script.google.com/macros/s/AKfycbyCo7YifdJrUnnaPrJkoscN9BKThY9jtNe0qxr0SHgmPk5yNVrKXQNp4n9v3PNJk7IF/exec';
-  // Drive folder 固定在後端，前端不需要也不提供 folderId/token
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GitHub Pages 測試｜雲端匯入排關圖（JSONP）</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 text-slate-800">
+  <header class="sticky top-0 z-10 bg-white/90 backdrop-blur border-b">
+    <div class="mx-auto max-w-3xl px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
+      <div class="font-bold">雲端匯入排關圖（GitHub Pages）</div>
+      <button id="btn" class="w-full sm:w-auto rounded-xl bg-slate-900 text-white px-3 py-2 text-sm font-semibold">從雲端匯入</button>
+    </div>
+  </header>
 
-  function jsonp(url, onDone) {
-    var cb = '__cb_' + Date.now() + '_' + Math.floor(Math.random()*1e6);
-    window[cb] = function(data) {
-      try { onDone(null, data); } finally {
-        try { delete window[cb]; } catch(e) { window[cb] = undefined; }
-        if (script && script.parentNode) script.parentNode.removeChild(script);
-      }
-    };
-    var script = document.createElement('script');
-    script.src = url + (url.indexOf('?')>=0 ? '&' : '?') + 'action=list&callback=' + cb;
-    script.onerror = function() {
-      try { onDone(new Error('JSONP load failed')); } finally {
-        try { delete window[cb]; } catch(e) { window[cb] = undefined; }
-        if (script && script.parentNode) script.parentNode.removeChild(script);
-      }
-    };
-    document.head.appendChild(script);
-  }
+  <main class="mx-auto max-w-3xl p-4">
+    <div class="text-xs text-slate-500">
+      API：<span class="font-mono">https://script.google.com/macros/s/AKfycbyCo7YifdJrUnnaPrJkoscN9BKThY9jtNe0qxr0SHgmPk5yNVrKXQNp4n9v3PNJk7IF/exec</span><br>
+      Folder ID（固定在後端）：<span class="font-mono">1aHrHqApa_PwLQWW5DzhDC5oRts1BKi4G</span>
+    </div>
 
-  // 呼叫範例：點「從雲端匯入」時
-  // jsonp(DRIVE_LIST_API, function(err, res) {
-  //   if (err || !res || !res.ok) return alert('雲端清單載入失敗');
-  //   console.log(res.items); // [{id, name, sizeBytes, updatedAt}, ...]
-  // });
-</script>
+    <div class="mt-4 rounded-2xl border bg-white overflow-hidden">
+      <div class="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-600">PDF 清單</div>
+      <div id="list" class="divide-y"></div>
+    </div>
+  </main>
+
+  <!-- Preview modal -->
+  <div id="modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/40" id="closeBg"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-3">
+      <div class="w-full max-w-5xl bg-white rounded-2xl shadow-xl overflow-hidden">
+        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b">
+          <div class="min-w-0">
+            <div class="text-sm font-semibold">排關圖預覽</div>
+            <div id="title" class="text-xs text-slate-500 truncate">—</div>
+          </div>
+          <button id="closeBtn" class="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">關閉</button>
+        </div>
+        <div class="h-[78vh] bg-slate-50">
+          <iframe id="frame" class="w-full h-full" src="about:blank"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    var API = 'https://script.google.com/macros/s/AKfycbyCo7YifdJrUnnaPrJkoscN9BKThY9jtNe0qxr0SHgmPk5yNVrKXQNp4n9v3PNJk7IF/exec';
+
+    function jsonp(url, onDone) {
+      var cb = '__cb_' + Date.now() + '_' + Math.floor(Math.random()*1e6);
+      window[cb] = function(data) {
+        try { onDone(null, data); } finally {
+          try { delete window[cb]; } catch(e) { window[cb] = undefined; }
+          if (script && script.parentNode) script.parentNode.removeChild(script);
+        }
+      };
+      var script = document.createElement('script');
+      script.src = url + (url.indexOf('?')>=0 ? '&' : '?') + 'action=list&callback=' + cb;
+      script.onerror = function() {
+        try { onDone(new Error('JSONP load failed')); } finally {
+          try { delete window[cb]; } catch(e) { window[cb] = undefined; }
+          if (script && script.parentNode) script.parentNode.removeChild(script);
+        }
+      };
+      document.head.appendChild(script);
+    }
+
+    function escapeHtml(s){
+      s = String(s==null?'':s);
+      return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    function openModal(fileId, name){
+      document.getElementById('title').textContent = name || '';
+      // Drive preview avoids Chrome popup/blob blocking
+      document.getElementById('frame').src = 'https://drive.google.com/file/d/' + fileId + '/preview';
+      document.getElementById('modal').classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+    function closeModal(){
+      document.getElementById('modal').classList.add('hidden');
+      document.getElementById('frame').src = 'about:blank';
+      document.body.classList.remove('overflow-hidden');
+    }
+    document.getElementById('closeBtn').onclick = closeModal;
+    document.getElementById('closeBg').onclick = closeModal;
+    window.addEventListener('keydown', function(e){ if (e && e.key === 'Escape') closeModal(); });
+
+    function render(items){
+      var list = document.getElementById('list');
+      list.innerHTML = '';
+      if (!items || !items.length){
+        list.innerHTML = '<div class="p-4 text-sm text-slate-600">沒有找到 PDF。</div>';
+        return;
+      }
+      for (var i=0;i<items.length;i++) {
+        (function(it){
+          var row = document.createElement('button');
+          row.type = 'button';
+          row.className = 'w-full text-left px-3 py-3 hover:bg-slate-50';
+          row.innerHTML = '<div class="text-sm font-semibold break-words">' + escapeHtml(it.name) + '</div>' +
+                          '<div class="text-xs text-slate-500 font-mono break-all">' + escapeHtml(it.id) + '</div>';
+          row.onclick = function(){ openModal(it.id, it.name); };
+          list.appendChild(row);
+        })(items[i]);
+      }
+    }
+
+    document.getElementById('btn').onclick = function(){
+      document.getElementById('btn').disabled = true;
+      document.getElementById('btn').textContent = '載入中…';
+      jsonp(API, function(err, res){
+        document.getElementById('btn').disabled = false;
+        document.getElementById('btn').textContent = '從雲端匯入';
+        if (err || !res || !res.ok) {
+          alert('雲端清單載入失敗');
+          render([]);
+          return;
+        }
+        render(res.items || []);
+      });
+    };
+  </script>
+</body>
+</html>
