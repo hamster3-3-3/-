@@ -1,1074 +1,1106 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>製管會項目填寫表單 (含PPT下載)</title>
-    <!-- 引入 Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 引入 PptxGenJS 用於生成簡報 -->
-    <script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>訪廠問題表格｜填寫＋PPT 匯出</title>
 
-    <style>
-        /* 使用 Inter 字體 */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
-        body {
-            font-family: 'Inter', 'Noto Sans TC', sans-serif;
-            background-color: #f3f4f6; /* 淺灰背景 */
-        }
-        /* 統一輸入框的視覺風格 */
-        .form-input {
-            /* 保持 w-full 佔滿父容器寬度 */
-            @apply w-full border border-gray-300 rounded-lg p-3
-                   focus:ring-2 focus:ring-teal-500 focus:border-teal-500
-                   transition duration-150;
-        }
-        /* 隱藏但保持佈局空間的樣式 */
-        .hidden-collapse { display: none; }
-        /* 用於複製的模板表單，隱藏不顯示 */
-        .form-template { display: none; }
-        /* 分頁顯示：一次只顯示一筆表單 */
-        .form-page { display: none; }
-        .form-page.is-active { display: block; }
-    </style>
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
 
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        teal: {
-                            50: '#f0fdfa', 100: '#ccfbf1', 200: '#99f6e4', 300: '#5eead4', 400: '#2dd4bf',
-                            500: '#14b8a6', 600: '#0d9488', 700: '#047876', 800: '#065f60', 900: '#004d40',
-                        },
-                        indigo: {
-                            50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8',
-                            500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81',
-                        },
-                        red: { 100: '#fee2e2', 700: '#b91c1c', 200: '#fecaca', 400: '#f87171' },
-                        orange: { 500: '#f97316', 600: '#ea580c', 700: '#c2410c' }
-                    }
-                }
-            }
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;600;700&display=swap');
+    :root { --font: 'Noto Sans TC','Microsoft JhengHei',system-ui,-apple-system,Segoe UI,Arial,sans-serif; }
+    body { font-family: var(--font); }
+
+    /* 單張圖片：不縮放顯示（可捲動） */
+    .one-image-wrap { overflow: auto; }
+    .one-image-wrap img { max-width: none; height: auto; }
+
+    /* Tabs scroll (mobile-friendly) */
+    .tabs-scroll { -webkit-overflow-scrolling: touch; }
+  </style>
+
+  <script>
+    // --- Robust loader for PptxGenJS (fix "download button does nothing" when CDN is blocked) ---
+    async function loadScriptOnce(src) {
+      return new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-src="' + src + '"]');
+        if (existing) { resolve(); return; }
+
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = true;
+        s.setAttribute('data-src', src);
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Failed to load: ' + src));
+        document.head.appendChild(s);
+      });
+    }
+
+    async function ensurePptxGenLoaded() {
+      // Already loaded
+      if (window.PptxGenJS) return true;
+
+      const candidates = [
+        // Primary (jsDelivr GitHub)
+        'https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js',
+        // Fallback (unpkg)
+        'https://unpkg.com/pptxgenjs@3.12.0/dist/pptxgen.bundle.js',
+        // Local fallback (place pptxgen.bundle.js next to this HTML if you want offline mode)
+        './pptxgen.bundle.js'
+      ];
+
+      for (const url of candidates) {
+        try {
+          await loadScriptOnce(url);
+          if (window.PptxGenJS) return true;
+        } catch (e) {
+          // continue
+          console.warn(e);
         }
-    </script>
+      }
+      return false;
+    }
+  </script>
+
+  <script>
+    // --- PDF.js loader (for extracting product name from 排關圖 PDF) ---
+    async function ensurePdfJsLoaded() {
+      if (window.pdfjsLib) return true;
+
+      const candidates = [
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.js',
+        'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.js',
+        './pdf.min.js'
+      ];
+
+      for (const url of candidates) {
+        try {
+          await loadScriptOnce(url);
+          if (window.pdfjsLib) {
+            // Worker (best effort)
+            try {
+              window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.js';
+            } catch (e) {}
+            return true;
+          }
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+      return false;
+    }
+  </script>
+
 </head>
 
-<body class="p-4 md:p-8">
+<body class="bg-slate-50 text-slate-800">
+  <!-- Floating catalog button (left-top, slightly lower to avoid covering title) -->
+  <button id="catalogBtn"
+          class="fixed z-40 rounded-xl border bg-white/90 backdrop-blur px-3 py-2 text-sm font-semibold shadow hover:bg-slate-50" style="left: 0; top: 0;">
+    商品目錄
+  </button>
 
-    <!-- ============ Mobile: 左上角「試產目錄」按鈕 + 抽屜式目錄（避免蓋住表單） ============ -->
-    <div class="lg:hidden fixed top-4 left-4 z-50">
-        <button type="button" id="mobile-toc-open-btn"
-            class="flex items-center gap-2 px-4 py-2 bg-white text-teal-700 font-semibold rounded-xl shadow-lg border border-gray-200 hover:bg-teal-50 focus:ring-4 focus:ring-teal-200">
-            <span class="inline-block w-2 h-2 rounded-full bg-teal-500"></span>
-            試產目錄
+  <header class="sticky top-0 z-30 border-b bg-white/80 backdrop-blur">
+    <div class="mx-auto max-w-6xl px-4 py-3 flex items-center justify-between gap-3">
+      <div class="min-w-0 flex items-center gap-2">
+        <h1 class="text-lg font-bold truncate">訪廠問題表格</h1>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="importPdfBtnHeader" class="rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-slate-50">匯入排關圖</button>
+        <button id="exportBtn"
+                class="rounded-xl bg-orange-500 px-3 py-2 text-sm font-semibold text-white hover:bg-orange-400">
+          下載 PPT
         </button>
+      </div>
     </div>
+  </header>
 
-    <!-- 背景遮罩 -->
-    <div id="mobile-toc-backdrop" class="hidden lg:hidden fixed inset-0 z-40 bg-black/40"></div>
+  <!-- Tabs bar -->
+  <div id="tabsBar" class="sticky top-[57px] z-20 border-b bg-white">
+    <div class="mx-auto max-w-6xl px-4 py-2">
+      <div class="flex items-center gap-2">
+        <div id="tabs" class="tabs-scroll flex-1 overflow-auto whitespace-nowrap"></div>
+        <div class="shrink-0 hidden sm:flex items-center gap-2">
+          <!-- 新增表單：放在「複製目前」左邊 -->
+<button id="addRowBtn"
+                  class="rounded-xl bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">
+            新增表單
+          </button>
+          <button id="dupActiveBtn" class="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">複製目前</button>
+          <button id="delActiveBtn"
+                  class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100">
+            刪除目前
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-    <!-- 左側抽屜 -->
-    <aside id="mobile-toc-drawer"
-        class="lg:hidden fixed inset-y-0 left-0 z-50 w-80 max-w-[85vw] bg-white shadow-2xl border-r border-gray-200 transform -translate-x-full transition-transform duration-200 flex flex-col">
-        <div class="p-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-            <h2 class="text-lg font-extrabold text-teal-700">試產目錄</h2>
-            <button type="button" id="mobile-toc-close-btn"
-                class="px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold">
-                關閉
+  <main class="mx-auto max-w-6xl px-4 py-6">
+    <section aria-label="records">
+      <div id="panels"></div>
+    </section>
+  </main>
+
+  <!-- Catalog modal -->
+  <div id="catalogModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/40" data-close="true"></div>
+    <div class="absolute bottom-0 left-0 right-0 sm:inset-0 sm:flex sm:items-center sm:justify-center">
+      <div class="w-full sm:max-w-lg rounded-t-2xl sm:rounded-2xl bg-white shadow-xl">
+        <div class="flex items-center justify-between px-4 py-3 border-b">
+          <div>
+            <div class="text-sm font-semibold">商品目錄</div>
+            <div class="text-xs text-slate-500">點選可跳轉到對應表單</div>
+          </div>
+          <button id="closeCatalogBtn" class="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">關閉</button>
+        </div>
+        <div id="catalogList" class="max-h-[70vh] overflow-auto p-2"></div>
+      </div>
+    </div>
+  </div>
+
+  <template id="panelTpl">
+    <article class="rounded-2xl border bg-white p-4 shadow-sm">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h2 class="text-sm font-semibold text-slate-700">
+            <span class="panelTitle">表單</span>
+          </h2>
+        </div>
+        <!-- Mobile actions (same position on every form) -->
+        <div class="flex shrink-0 items-center gap-2 sm:hidden">
+          <button class="addBtn rounded-xl border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">新增</button>
+          <button class="dupBtn rounded-xl border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">複製</button>
+          <button class="delBtn rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100">刪除</button>
+        </div>
+      </div>
+
+      <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-12">
+        <label class="md:col-span-4">
+          <span class="text-xs font-semibold text-slate-600">類型</span>
+          <select class="typeInput mt-1 w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring">
+            <option value="">請選擇</option>
+            <option value="生產面">生產面</option>
+            <option value="衛生面">衛生面</option>
+          </select>
+        </label>
+
+        <label class="md:col-span-8">
+          <span class="text-xs font-semibold text-slate-600">商品名</span>
+          <div class="mt-1 flex items-center gap-2">
+            <input class="nameInput flex-1 w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring" placeholder="" />
+            <button type="button" class="showPdfBtn shrink-0 rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-slate-50">
+              顯示排關圖
             </button>
-        </div>
-        <div class="p-4 flex-1 overflow-y-auto">
-            <div id="toc-container-mobile" class="space-y-2">
-                <p class="text-sm text-gray-400">點擊商品名稱快速跳轉...</p>
-            </div>
-        </div>
-    </aside>
+          </div>
+        </label>
 
-    <!-- Responsive Wrapper -->
-    <div class="max-w-7xl mx-auto flex flex-col lg:flex-row gap-6 pt-16 lg:pt-0">
+        <label class="md:col-span-12">
+          <span class="text-xs font-semibold text-slate-600">問題說明</span>
+          <textarea class="descInput mt-1 w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring" rows="6" placeholder=""></textarea>
+        </label>
+      </div>
 
-        <!-- Desktop: Sidebar -->
-        <div class="hidden lg:block w-72 flex-shrink-0">
-            <div class="sticky top-8 p-4 bg-white rounded-xl shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
-                <h2 class="text-xl font-bold text-teal-600 border-b-2 border-teal-100 pb-2 mb-3">試產目錄</h2>
-                <div id="toc-container-desktop" class="space-y-2">
-                    <p class="text-sm text-gray-400">點擊商品名稱快速跳轉...</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Content Area -->
-        <div id="main-content" class="flex-grow">
-            <div id="main-container" class="bg-white rounded-xl shadow-2xl">
-                <div class="p-6 rounded-t-xl bg-gray-50 border-b border-gray-200">
-                    <h1 class="text-3xl font-extrabold text-gray-800">製管會項目</h1>
-                    <p class="text-gray-500 mt-1">請填寫試產相關資訊及異常/優化追蹤細節。<span class="font-semibold">所有欄位皆為非必填</span></p>
-
-                    <!-- 分頁導覽（一次顯示一筆表單） -->
-                    <div class="mt-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                        <div class="flex items-center gap-2">
-                            <button type="button" id="prev-form-btn"
-                                class="px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 font-semibold shadow-sm hover:bg-gray-50 focus:ring-4 focus:ring-teal-200 disabled:opacity-40 disabled:cursor-not-allowed">
-                                上一筆
-                            </button>
-                            <button type="button" id="next-form-btn"
-                                class="px-4 py-2 rounded-lg bg-white border border-gray-200 text-gray-700 font-semibold shadow-sm hover:bg-gray-50 focus:ring-4 focus:ring-teal-200 disabled:opacity-40 disabled:cursor-not-allowed">
-                                下一筆
-                            </button>
-                            <span id="pager-indicator" class="ml-2 text-sm text-gray-500">目前：0 / 0</span>
-                        </div>
-                        <div class="text-sm text-gray-500">
-                            透過左側「試產目錄」點擊項目即可直接切換到該筆表單。
-                        </div>
-                    </div>
-                </div>
-
-                <div id="forms-wrapper" class="divide-y divide-gray-200">
-                    <!-- 表單將在此生成 -->
-                </div>
-
-                <!-- Master Action Buttons -->
-                <div class="flex flex-col md:flex-row justify-center items-center space-y-4 md:space-y-0 md:space-x-6 p-6 bg-gray-50 rounded-b-xl border-t border-gray-200">
-                    <button type="button" id="submit-all-btn"
-                            class="w-full md:w-auto px-8 py-3 bg-teal-600 text-white font-bold rounded-xl shadow-lg hover:bg-teal-700
-                                    transition duration-300 transform hover:scale-105 focus:ring-4 focus:ring-teal-300 flex items-center justify-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        上傳報表
-                    </button>
-
-                    <button type="button" id="download-ppt-btn"
-                            class="w-full md:w-auto px-8 py-3 bg-orange-600 text-white font-bold rounded-xl shadow-lg hover:bg-orange-700
-                                    transition duration-300 transform hover:scale-105 focus:ring-4 focus:ring-orange-300 flex items-center justify-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                        </svg>
-                        下載簡報 (PPTX)
-                    </button>
-                </div>
-
-                <!-- 輸出結果區塊 -->
-                <div id="output-section" class="mt-8 hidden">
-                    <h2 class="text-xl font-semibold text-green-700 mb-4 border-b pb-2 px-6">CSV/Excel 輸出內容 (共 <span id="form-count-output">0</span> 筆)</h2>
-                    <pre id="form-output" class="bg-gray-800 text-green-300 p-6 rounded-xl shadow-inner overflow-x-auto text-sm mx-6"></pre>
-                    <p class="text-xs text-gray-500 mt-2 px-6">CSV 已上傳至 Google 雲端硬碟。</p>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 表單模板 -->
-    <form id="form-template" class="form-template">
-        <div class="py-8 border-l-4 border-indigo-500 bg-indigo-50/50">
-            <h2 class="form-title text-2xl font-extrabold text-indigo-700 mb-6 flex items-center pb-2 border-b border-indigo-200 px-6">
-                <span class="inline-block w-2 h-6 bg-indigo-500 rounded-sm mr-3"></span>
-                試產資訊 #1
-            </h2>
-            <div class="mb-6 px-6">
-                <label for="item_name" class="block text-sm font-semibold text-gray-700 mb-1">商品名稱</label>
-                <input type="text" id="item_name" name="商品" placeholder="請輸入完整的商品名稱" class="form-input focus:ring-indigo-500 focus:border-indigo-500">
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 px-6">
-                <div>
-                    <label for="meeting_date" class="block text-sm font-semibold text-gray-700 mb-1">會議日期</label>
-                    <input type="date" id="meeting_date" name="會議日期" class="form-input focus:ring-indigo-500 focus:border-indigo-500">
-                </div>
-                <div>
-                    <label for="launch_date" class="block text-sm font-semibold text-gray-700 mb-1">上市日</label>
-                    <input type="date" id="launch_date" name="上市日" class="form-input focus:ring-indigo-500 focus:border-indigo-500">
-                </div>
-                <div>
-                    <label for="category" class="block text-sm font-semibold text-gray-700 mb-1">品類</label>
-                    <select id="category" name="品類" class="form-input bg-white focus:ring-indigo-500 focus:border-indigo-500"></select>
-                </div>
-                <div>
-                    <label for="phase" class="block text-sm font-semibold text-gray-700 mb-1">階段</label>
-                    <select id="phase" name="階段" class="form-input bg-white focus:ring-indigo-500 focus:border-indigo-500"></select>
-                </div>
-                <div>
-                    <label for="main_factory" class="block text-sm font-semibold text-gray-700 mb-1">主事廠</label>
-                    <select id="main_factory" name="主事廠" class="form-input bg-white focus:ring-indigo-500 focus:border-indigo-500"></select>
-                </div>
-                <div>
-                    <label for="sub_factory" class="block text-sm font-semibold text-gray-700 mb-1">副事廠</label>
-                    <select id="sub_factory" name="副事廠" class="form-input bg-white focus:ring-indigo-500 focus:border-indigo-500"><option value="">(無)</option></select>
-                </div>
-            </div>
+      <div class="mt-4 rounded-2xl border bg-slate-50 p-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p class="text-sm font-semibold">圖片上傳（支援手機、多張）</p>
+            <p class="text-xs text-slate-600">一次可選多張；PPT 每頁最多放 2 張，超過會自動續頁。</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 cursor-pointer">
+              選擇圖片
+              <input class="imgInput hidden" type="file" accept="image/*" multiple />
+            </label>
+            <button class="clearImgsBtn rounded-xl border px-3 py-2 text-sm font-semibold hover:bg-white">清除圖片</button>
+          </div>
         </div>
 
-        <div class="py-8 border-l-4 border-teal-500 bg-teal-50/50 border-t border-gray-200">
-            <h2 class="text-2xl font-extrabold text-teal-700 mb-6 flex items-center pb-2 border-b border-teal-200 px-6">
-                <span class="inline-block w-2 h-6 bg-teal-500 rounded-sm mr-3"></span>
-                異常/優化追蹤
-            </h2>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 px-6 mb-6">
-                <div>
-                    <label for="proposer" class="block text-sm font-semibold text-gray-700 mb-1">提出者</label>
-                    <input type="text" id="proposer" name="提出者" placeholder="請輸入提出者名稱" class="form-input focus:ring-teal-500 focus:border-teal-500">
-                </div>
-                <div>
-                    <label for="issue_type" class="block text-sm font-semibold text-gray-700 mb-1">類型</label>
-                    <select id="issue_type" name="類型" class="form-input bg-white"></select>
-                </div>
-                <div id="detailed-type-container">
-                    <label for="detailed_type" class="block text-sm font-semibold text-gray-700 mb-1">詳細類型</label>
-                    <select id="detailed_type" name="詳細類型" class="form-input bg-white"><option value="">(請先選擇類型)</option></select>
-                </div>
-                <div id="responsible-factory-container" class="hidden-collapse">
-                    <label for="responsible_factory" class="block text-sm font-semibold text-gray-700 mb-1">責任廠</label>
-                    <select id="responsible_factory" name="責任廠" class="form-input bg-white"><option value="">(無)</option></select>
-                </div>
-                <div id="responsible-party-container" class="hidden-collapse">
-                    <label for="responsible_party" class="block text-sm font-semibold text-gray-700 mb-1">責任端</label>
-                    <select id="responsible_party" name="責任端" class="form-input bg-white"><option value="">(無)</option></select>
-                </div>
-                <div>
-                    <label for="recorder" class="block text-sm font-semibold text-gray-700 mb-1">記錄者</label>
-                    <input type="text" id="recorder" name="記錄者" placeholder="請輸入記錄者名稱" class="form-input focus:ring-teal-500 focus:border-teal-500">
-                </div>
-            </div>
-
-            <div class="px-6 mt-2 space-y-4">
-                <div>
-                    <label for="item_description" class="block text-sm font-semibold text-gray-700 mb-1">項目說明</label>
-                    <textarea id="item_description" name="項目說明" rows="6"
-                        placeholder="請描述本次試產／架上品的異常狀況、優化重點或新增規範內容。"
-                        class="form-input h-36 md:h-40 resize-y focus:ring-teal-500 focus:border-teal-500"></textarea>
-                </div>
-                <div>
-                    <label for="execution_instructions" class="block text-sm font-semibold text-gray-700 mb-1">執行說明</label>
-                    <textarea id="execution_instructions" name="執行說明" rows="6"
-                        placeholder="請填寫後續處理方式、修正作法、試產調整方向。"
-                        class="form-input h-36 md:h-40 resize-y focus:ring-teal-500 focus:border-teal-500"></textarea>
-                </div>
-
-                <!-- 照片上傳 -->
-                <div>
-                    <label for="issue_photo" class="block text-sm font-semibold text-gray-700 mb-1">照片上傳（異常/優化佐證）</label>
-                    <input type="file" id="issue_photo" name="照片檔" accept="image/*"
-                        class="form-input bg-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700 hover:file:bg-teal-100" />
-                    <input type="hidden" id="issue_photo_data" name="照片資料" value="" />
-                    <div class="mt-3">
-                        <div class="text-xs text-gray-500 mb-2">建議：拍攝/上傳後會自動壓縮（加速PPT生成、避免檔案過大）。</div>
-                        <div class="w-full border border-gray-200 rounded-xl bg-white p-3">
-                            <img id="issue_photo_preview" alt="照片預覽" class="hidden w-full max-h-64 object-contain rounded-lg" />
-                            <div id="issue_photo_empty" class="text-sm text-gray-400">尚未上傳照片</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <label for="remarks" class="block text-sm font-semibold text-gray-700 mb-1">備註</label>
-                    <textarea id="remarks" name="備註" rows="5"
-                        placeholder="補充說明其他未涵蓋事項。"
-                        class="form-input h-32 md:h-36 resize-y focus:ring-teal-500 focus:border-teal-500"></textarea>
-                </div>
-            </div>
-
-            <div id="non-adoption-container" class="px-6 mt-6 hidden-collapse">
-                <label for="reason_for_non_adoption" class="block text-sm font-semibold text-gray-700 mb-1">不採用原因(優化)</label>
-                <textarea id="reason_for_non_adoption" name="不採用原因(優化)" rows="4" placeholder="請填寫不採納此優化提案的具體原因。"
-                    class="form-input resize-y focus:ring-teal-500 focus:border-teal-500"></textarea>
-            </div>
+        <div class="mt-4">
+          <div class="imgHint text-xs text-slate-500">尚未選擇圖片。</div>
+          <div class="imgPreview mt-3"></div>
         </div>
+      </div>
+    </article>
+  </template>
 
-        <div class="flex justify-end space-x-4 p-6 bg-gray-50 border-t border-gray-200">
-            <button type="button" class="add-form-btn-local px-6 py-2 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition duration-300 focus:ring-4 focus:ring-indigo-300">新增一筆項目</button>
-            <button type="button" class="remove-form-btn px-6 py-2 bg-red-100 text-red-700 font-semibold rounded-lg shadow-md hover:bg-red-200 transition duration-300 focus:ring-4 focus:ring-red-400">移除當前項目</button>
-        </div>
-    </form>
-
-    <script>
-        let formIndex = 0;
-
-        const dropdownOptions = {
-            '品類': ['飯糰', '壽司手卷', '主食', '便當', '熱食義麵', '季節調理麵', '沙拉', '小吃', '三明治(調理麵包)', '甜點'],
-            '階段': ['架上品', '試產一', '試產二', '試產1-0', '試產1-1', '其他量化'],
-            '工廠列表': ['屏榮新豐', '屏榮大溪', '晉欣', '長家', '玉美', '連合發'],
-            '責任端': ['生產端', '開發端', '物料端'],
-            '類型': ['異常', '優化提案', '優化採用', '新增規範'],
-        };
-
-        const detailedOptionsMap = {
-            '異常': ['良品設定未完善', '不符合指示書設定', '微波狀態不符合設定', '物料未到樣', '賣相不符合指示書設定', '物料異常'],
-            '優化提案': ['效率優化', '製程優化', '其他優化'],
-            '優化採用': ['效率優化', '製程優化', '其他優化'],
-            '新增規範': [], '': []
-        };
-
-        const preloadedData = [];
-
-        // ===== Google Apps Script Web App 設定 =====
-        const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycby4EafDJN6B6El3M6vL4-qFiWAIxW1_1JZ_TL9QKsj3ggX-d7Dvg7lX0H_ju5l2f0ltIg/exec";
-        const GAS_TOKEN = "rice_test_2025"; // 必須與 Apps Script 端 TOKEN 完全一致
+  <input id="pdfInput" type="file" accept="application/pdf" multiple class="hidden" />
 
 
-        const outputHeaders = [
-            { outputName: '會議日期', formName: '會議日期' },
-            { outputName: '月', formName: '會議日期', type: 'month_derived' },
-            { outputName: '品類', formName: '品類' },
-            { outputName: '商品', formName: '商品' },
-            { outputName: '階段', formName: '階段' },
-            { outputName: '上市日', formName: '上市日', isOptional: true },
-            { outputName: '主事廠', formName: '主事廠' },
-            { outputName: '副事廠', formName: '副事廠', isOptional: true },
-            { outputName: '提出者', formName: '提出者' },
-            { outputName: '類型', formName: '類型' },
-            { outputName: '詳細類型', formName: '詳細類型' },
-            { outputName: '項目說明', formName: '項目說明' },
-            { outputName: '執行說明', formName: '執行說明' },
-            { outputName: '責任廠 (異常)', formName: '責任廠', isConditional: true, conditionValue: '異常' },
-            { outputName: '責任端(異常)', formName: '責任端', isConditional: true, conditionValue: '異常' },
-            { outputName: '不採用原因(優化)', formName: '不採用原因(優化)', isConditional: true, conditionValue: '優化提案', isOptional: true },
-            { outputName: '備註', formName: '備註', isOptional: true },
-            { outputName: '記錄者', formName: '記錄者' }
-        ];
+  <script>
+    const $ = (sel, root) => (root || document).querySelector(sel);
+    const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
 
-        function populateSelect(selectElement, options, defaultText = "(請選擇)") {
-            if (!selectElement) return;
-            selectElement.innerHTML = '';
-            const defaultOption = document.createElement('option');
-            defaultOption.value = "";
-            defaultOption.textContent = defaultText;
-            selectElement.appendChild(defaultOption);
-            options.forEach(optionText => {
-                const option = document.createElement('option');
-                option.value = optionText;
-                option.textContent = optionText;
-                selectElement.appendChild(option);
-            });
+    const tabsEl = $('#tabs');
+    const panelsEl = $('#panels');
+    const panelTpl = $('#panelTpl');
+
+    const state = { records: [], active: 0 };
+
+
+    // ---------------- 排關圖（PDF）管理 ----------------
+    const pdfStore = new Map(); // key: normalized product name -> { displayName, fileName, blobUrl }
+
+    function normalizeKey(s) {
+      const t = (s || '').toString().trim();
+      return t
+        .replace(/\s+/g, '')
+        .replace(/[()（）【】\[\]{}「」『』"“”'’`·•‧,，.。:：;；!！?？\/\\|｜\-—_]/g, '')
+        .toLowerCase();
+    }
+
+    function guessNameFromFilename(fileName) {
+      const base = (fileName || '').replace(/\.pdf$/i, '');
+      // 例： "1.義式番茄起司義大利麵" -> "義式番茄起司義大利麵"
+      return base.replace(/^\s*\d+\s*[\.\-、_ ]\s*/,'').trim() || base.trim();
+    }
+
+    async function extractProductNameFromPdf(arrayBuffer) {
+      const ok = await ensurePdfJsLoaded();
+      if (!ok || !window.pdfjsLib) return '';
+
+      try {
+        const doc = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await doc.getPage(1);
+        const tc = await page.getTextContent();
+        const text = tc.items.map(it => (it && it.str) ? it.str : '').join(' ');
+        // 常見格式： "商品名稱 義式番茄起司義大利麵"
+        let m = text.match(/商品名稱\s*([^\s].*?)(?:\s{2,}|生產列數|半成品設備|包裝設備|作成日|產線時間|$)/);
+        if (m && m[1]) return m[1].trim();
+
+        const idx = text.indexOf('商品名稱');
+        if (idx >= 0) {
+          const tail = text.slice(idx + 4, idx + 60);
+          return tail.trim();
+        }
+        return '';
+      } catch (e) {
+        console.warn('extractProductNameFromPdf failed', e);
+        return '';
+      }
+    }
+
+    function pdfListText() {
+      const names = Array.from(pdfStore.values()).map(v => v.displayName).filter(Boolean);
+      return names.length ? names.join('、') : '（無）';
+    }
+
+    async function importPdfFiles(files) {
+      if (!files || !files.length) return;
+
+      let imported = 0;
+
+      for (const f of files) {
+        try {
+          const ab = await f.arrayBuffer();
+          const extracted = await extractProductNameFromPdf(ab);
+          const displayName = extracted || guessNameFromFilename(f.name);
+          const key = normalizeKey(displayName);
+          const blobUrl = URL.createObjectURL(new Blob([ab], { type: 'application/pdf' }));
+
+          const prev = pdfStore.get(key);
+          if (prev && prev.blobUrl) {
+            try { URL.revokeObjectURL(prev.blobUrl); } catch (e) {}
+          }
+
+          pdfStore.set(key, { displayName, fileName: f.name, blobUrl });
+          imported += 1;
+        } catch (e) {
+          console.warn('import pdf failed:', f && f.name, e);
+        }
+      }
+
+      alert(`已匯入排關圖：${imported} 份`);
+    }
+
+    function findPdfForProductName(productName) {
+      const key = normalizeKey(productName);
+      if (!key) return null;
+
+      if (pdfStore.has(key)) return pdfStore.get(key);
+
+      for (const [k, v] of pdfStore.entries()) {
+        if (k && key && (k.includes(key) || key.includes(k))) return v;
+      }
+      return null;
+    }
+
+    function openPdfModal(productName, pdfItem) {
+      const modal = document.getElementById('pdfModal');
+      const frame = document.getElementById('pdfFrame');
+      const empty = document.getElementById('pdfEmpty');
+      const title = document.getElementById('pdfTitle');
+      const list = document.getElementById('pdfListText');
+
+      title.textContent = productName ? `商品名：${productName}` : '—';
+      list.textContent = pdfListText();
+
+      if (pdfItem && pdfItem.blobUrl) {
+        empty.classList.add('hidden');
+        frame.classList.remove('hidden');
+        frame.src = pdfItem.blobUrl;
+      } else {
+        frame.classList.add('hidden');
+        frame.src = 'about:blank';
+        empty.classList.remove('hidden');
+      }
+
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+
+    function closePdfModal() {
+      const modal = document.getElementById('pdfModal');
+      const frame = document.getElementById('pdfFrame');
+      modal.classList.add('hidden');
+      try { frame.src = 'about:blank'; } catch (e) {}
+      document.body.classList.remove('overflow-hidden');
+    }
+
+
+    function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
+
+    function todayISO() {
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+
+    function makeEmptyRecord() { return { type: '', name: '', desc: '', images: [] }; }
+
+    function displayName(rec, idx) {
+      const name = rec && typeof rec.name === 'string' ? rec.name : '';
+      const n = name.trim();
+      return n ? n : `未命名 ${idx + 1}`;
+    }
+
+    function chunk(arr, size) {
+      const out = [];
+      for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+      return out;
+    }
+
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function getImageSize(dataUrl) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        img.src = dataUrl;
+      });
+    }
+
+    function renderImagePreview(container, images) {
+      container.innerHTML = '';
+      if (!images || images.length === 0) return;
+
+      if (images.length === 1) {
+        const wrap = document.createElement('div');
+        wrap.className = 'one-image-wrap rounded-xl border bg-white p-2';
+        const img = document.createElement('img');
+        img.src = images[0].dataUrl;
+        img.alt = images[0].name || 'image';
+        wrap.appendChild(img);
+        container.appendChild(wrap);
+        return;
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4';
+      images.forEach((it) => {
+        const card = document.createElement('div');
+        card.className = 'rounded-xl border bg-white p-2';
+
+        const img = document.createElement('img');
+        img.src = it.dataUrl;
+        img.alt = it.name || 'image';
+        img.className = 'h-32 w-full rounded-lg object-cover';
+
+        const meta = document.createElement('div');
+        meta.className = 'mt-2 text-[11px] text-slate-500 break-all';
+        meta.textContent = it.name || '';
+
+        card.appendChild(img);
+        card.appendChild(meta);
+        grid.appendChild(card);
+      });
+      container.appendChild(grid);
+    }
+
+    function setActive(index, opts) {
+      const options = opts || { scrollTabIntoView: true };
+      const i = Math.max(0, Math.min(index, state.records.length - 1));
+      state.active = i;
+
+      $$('.tabBtn', tabsEl).forEach((btn) => {
+        const idx = Number(btn.dataset.idx);
+        const isOn = idx === i;
+        btn.classList.toggle('bg-slate-900', isOn);
+        btn.classList.toggle('text-white', isOn);
+        btn.classList.toggle('bg-white', !isOn);
+        btn.classList.toggle('text-slate-700', !isOn);
+        btn.classList.toggle('border-slate-200', !isOn);
+        btn.classList.toggle('border-slate-900', isOn);
+      });
+
+      $$('.panel', panelsEl).forEach((p) => {
+        const idx = Number(p.dataset.idx);
+        p.classList.toggle('hidden', idx !== i);
+      });
+
+      if (options.scrollTabIntoView) {
+        const activeBtn = tabsEl.querySelector(`.tabBtn[data-idx="${i}"]`);
+        if (activeBtn) activeBtn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+      }
+
+      // Reposition floating catalog button after tab changes
+      schedulePositionCatalogBtn();
+    }
+
+    function updateTabLabel(idx) {
+      const el = tabsEl.querySelector(`.tabBtn[data-idx="${idx}"] .tabLabel`);
+      if (el) el.textContent = displayName(state.records[idx], idx);
+    }
+
+    function updatePanelTitle(panelEl, idx) {
+      const t = panelEl.querySelector('.panelTitle');
+      if (t) t.textContent = displayName(state.records[idx], idx);
+    }
+
+    function removeAt(idx) {
+      if (state.records.length <= 1) {
+        state.records[0] = makeEmptyRecord();
+        renderAll();
+        schedulePositionCatalogBtn();
+        return;
+      }
+      state.records.splice(idx, 1);
+      if (state.active >= state.records.length) state.active = state.records.length - 1;
+      renderAll();
+    }
+
+    function duplicateAt(idx) {
+      const copy = deepClone(state.records[idx]);
+      state.records.splice(idx + 1, 0, copy);
+      renderAll();
+      setActive(idx + 1);
+    }
+
+    function addForm(prefill) {
+      const record = prefill ? deepClone(prefill) : makeEmptyRecord();
+      state.records.push(record);
+      renderAll();
+      setActive(state.records.length - 1);
+    }
+
+    function renderAll() {
+      tabsEl.innerHTML = '';
+      panelsEl.innerHTML = '';
+
+      state.records.forEach((rec, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.dataset.idx = String(idx);
+        btn.className = 'tabBtn inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-semibold mr-2';
+        btn.innerHTML = `<span class="tabLabel">${displayName(rec, idx)}</span>`;
+        btn.addEventListener('click', () => setActive(idx));
+        tabsEl.appendChild(btn);
+
+        const node = panelTpl.content.cloneNode(true);
+        const panel = node.querySelector('article');
+        panel.classList.add('panel');
+        panel.dataset.idx = String(idx);
+
+        const typeInput = $('.typeInput', panel);
+        const nameInput = $('.nameInput', panel);
+        const descInput = $('.descInput', panel);
+
+        const imgInput = $('.imgInput', panel);
+        const imgHint = $('.imgHint', panel);
+        const imgPreview = $('.imgPreview', panel);
+
+        typeInput.value = rec.type || '';
+        nameInput.value = rec.name || '';
+        descInput.value = rec.desc || '';
+
+        updatePanelTitle(panel, idx);
+
+        if (rec.images && rec.images.length) {
+          imgHint.textContent = `已選擇 ${rec.images.length} 張圖片。`;
+          renderImagePreview(imgPreview, rec.images);
         }
 
-        // --- Image Upload & Compression (store as DataURL for PPT) ---
-        async function downscaleToJpegDataUrl(file, maxSide = 1280, quality = 0.82) {
-            const readAsDataURL = (f) => new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(String(reader.result || ''));
-                reader.onerror = reject;
-                reader.readAsDataURL(f);
-            });
+        const setRecord = (patch) => Object.assign(state.records[idx], patch);
 
-            const srcDataUrl = await readAsDataURL(file);
+        typeInput.addEventListener('change', (e) => setRecord({ type: e.target.value || '' }));
 
-            try {
-                const img = new Image();
-                img.decoding = 'async';
-                img.src = srcDataUrl;
-                await new Promise((res, rej) => {
-                    img.onload = () => res();
-                    img.onerror = rej;
-                });
-
-                const w = img.naturalWidth || img.width;
-                const h = img.naturalHeight || img.height;
-                if (!w || !h) return srcDataUrl;
-
-                const scale = Math.min(1, maxSide / Math.max(w, h));
-                const targetW = Math.max(1, Math.round(w * scale));
-                const targetH = Math.max(1, Math.round(h * scale));
-
-                const canvas = document.createElement('canvas');
-                canvas.width = targetW;
-                canvas.height = targetH;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) return srcDataUrl;
-
-                ctx.drawImage(img, 0, 0, targetW, targetH);
-                const out = canvas.toDataURL('image/jpeg', quality);
-                return out || srcDataUrl;
-            } catch (e) {
-                return srcDataUrl;
-            }
-        }
-
-        async function handleIssuePhotoChange(formElement, index) {
-            const suffix = `-${index}`;
-            const fileInput = formElement.querySelector(`#issue_photo${suffix}`);
-            const hiddenInput = formElement.querySelector(`#issue_photo_data${suffix}`);
-            const previewImg = formElement.querySelector(`#issue_photo_preview${suffix}`);
-            const emptyHint = formElement.querySelector(`#issue_photo_empty${suffix}`);
-
-            if (!fileInput || !hiddenInput || !previewImg || !emptyHint) return;
-            const file = fileInput.files && fileInput.files[0];
-
-            if (!file) {
-                hiddenInput.value = '';
-                previewImg.src = '';
-                previewImg.classList.add('hidden');
-                emptyHint.classList.remove('hidden');
-                return;
-            }
-
-            if (!file.type || !file.type.startsWith('image/')) {
-                alert('請上傳圖片檔（image/*）。');
-                fileInput.value = '';
-                return;
-            }
-
-            const dataUrl = await downscaleToJpegDataUrl(file, 1280, 0.82);
-            hiddenInput.value = dataUrl;
-
-            previewImg.src = dataUrl;
-            previewImg.classList.remove('hidden');
-            emptyHint.classList.add('hidden');
-        }
-
-        // --- PPT Generation Logic (Production PPT 版型：內容頁；已移除封面/大綱) ---
-        async function generatePPT() {
-            const pptx = new PptxGenJS();
-            // 對齊你提供的 Production PPT 版型：WIDE (13.333 x 7.5)
-            pptx.layout = 'LAYOUT_WIDE';
-
-            // ===== Helpers: Production 版型（內容頁） =====
-            const W = 13.333;
-            const H = 7.5;
-            const FONT = 'Microsoft JhengHei';
-            const COLOR_BLUE = '1D4ED8';
-            const COLOR_GREEN = '16A34A';
-            const COLOR_ORANGE = 'F59E0B';
-            const FILL_YELLOW = 'FFF2CC';
-            const TEXT = '111111';
-
-            const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
-
-            async function addImageContain(slide, dataUrl, box) {
-                // 瀏覽器端讀取圖片尺寸，做 contain 等比例置中
-                const dim = await new Promise((resolve) => {
-                    const img = new Image();
-                    img.onload = () => resolve({ iw: img.naturalWidth || img.width, ih: img.naturalHeight || img.height });
-                    img.onerror = () => resolve({ iw: 1, ih: 1 });
-                    img.src = dataUrl;
-                });
-
-                const iw = Math.max(1, dim.iw);
-                const ih = Math.max(1, dim.ih);
-                const boxAR = box.w / box.h;
-                const imgAR = iw / ih;
-
-                let drawW, drawH;
-                if (imgAR >= boxAR) { drawW = box.w; drawH = box.w / imgAR; }
-                else { drawH = box.h; drawW = box.h * imgAR; }
-
-                drawW = clamp(drawW, 0.01, box.w);
-                drawH = clamp(drawH, 0.01, box.h);
-
-                const dx = box.x + (box.w - drawW) / 2;
-                const dy = box.y + (box.h - drawH) / 2;
-
-                slide.addImage({ data: dataUrl, x: dx, y: dy, w: drawW, h: drawH });
-            }
-
-            function addProductionContentSlide(pptx, payload) {
-                const slide = pptx.addSlide();
-
-                // 上雙色線（藍 + 綠）
-                const topY1 = 0.30;
-                const topY2 = topY1 + 0.05;
-                slide.addShape(pptx.ShapeType.line, { x: 0, y: topY1, w: W, h: 0, line: { color: COLOR_BLUE, width: 1 } });
-                slide.addShape(pptx.ShapeType.line, { x: 0, y: topY2, w: W, h: 0, line: { color: COLOR_GREEN, width: 1 } });
-
-                // 左上角章節/階段
-                slide.addText(payload.phaseText || '參、（階段）', {
-                    x: 0.30, y: 0.10, w: 6.0, h: 0.35,
-                    fontFace: FONT, fontSize: 14, color: TEXT,
-                    align: 'left', valign: 'top'
-                });
-
-                // 置中大標題： （商品名稱）（優化類型）
-                slide.addText(`（${payload.productName || '商品名稱'}）（${payload.optType || '優化類型'}）`, {
-                    x: 0.50, y: 0.55, w: W - 1.0, h: 0.80,
-                    fontFace: FONT, fontSize: 36, color: TEXT,
-                    align: 'center', valign: 'mid'
-                });
-
-                // 圖片區
-                const descBoxH = 1.95;
-                const footerAreaH = 0.35;
-                const imgBox = {
-                    x: 1.25,
-                    y: 1.55,
-                    w: W - 2.50,
-                    h: H - 1.55 - descBoxH - footerAreaH - 0.15
-                };
-
-                if (!payload.photoDataUrl) {
-                    slide.addText('（照片位置）', {
-                        x: imgBox.x, y: imgBox.y + imgBox.h / 2 - 0.2, w: imgBox.w, h: 0.4,
-                        fontFace: FONT, fontSize: 18, color: '666666',
-                        align: 'center', valign: 'mid'
-                    });
-                } else {
-                    slide.__imgJobs = slide.__imgJobs || [];
-                    slide.__imgJobs.push({ dataUrl: payload.photoDataUrl, box: imgBox });
-                }
-
-                // 底部說明框（淺黃底 + 橘框）
-                const descBox = {
-                    x: 0.55,
-                    y: H - descBoxH - 0.45,
-                    w: W - 1.10,
-                    h: descBoxH
-                };
-
-                slide.addShape(pptx.ShapeType.rect, {
-                    x: descBox.x, y: descBox.y, w: descBox.w, h: descBox.h,
-                    fill: { color: FILL_YELLOW },
-                    line: { color: COLOR_ORANGE, width: 1.5 }
-                });
-
-                const d1 = (payload.desc1 || '').trim();
-                const d2 = (payload.desc2 || '').trim();
-                const text = `${d1 || '（說明）'}\n${d2 || '（詳細說明）'}`;
-
-                slide.addText(text, {
-                    x: descBox.x + 0.18, y: descBox.y + 0.18,
-                    w: descBox.w - 0.36, h: descBox.h - 0.36,
-                    fontFace: FONT, fontSize: 20, color: TEXT,
-                    align: 'left', valign: 'top',
-                    lineSpacingMultiple: 1.1
-                });
-
-                // 下雙色線（藍 + 綠）
-                const botY1 = H - 0.35;
-                const botY2 = botY1 + 0.05;
-                slide.addShape(pptx.ShapeType.line, { x: 0, y: botY1, w: W, h: 0, line: { color: COLOR_BLUE, width: 1 } });
-                slide.addShape(pptx.ShapeType.line, { x: 0, y: botY2, w: W, h: 0, line: { color: COLOR_GREEN, width: 1 } });
-
-                // 保密文字
-                slide.addText('本文件為「全家便利商店股份有限公司」所有，請勿外洩', {
-                    x: 0.50, y: H - 0.28, w: W - 1.0, h: 0.25,
-                    fontFace: FONT, fontSize: 10, color: '333333',
-                    align: 'center', valign: 'mid'
-                });
-
-                return slide;
-            }
-
-            async function finalizeProductionImages(pptx) {
-                const slides = pptx._slides || [];
-                for (const s of slides) {
-                    const jobs = s.__imgJobs || [];
-                    for (const job of jobs) {
-                        await addImageContain(s, job.dataUrl, job.box);
-                    }
-                    delete s.__imgJobs;
-                }
-            }
-
-            // ===== 取得會議日期（用第一筆） =====
-            const firstForm = document.querySelector('.tracking-form-instance');
-            let meetingDate = 'YYYY/MM/DD';
-            if (firstForm) {
-                const dateInput = firstForm.querySelector('input[name="會議日期"]');
-                if (dateInput && dateInput.value) meetingDate = dateInput.value.replace(/-/g, '/');
-            }
-
-            // ✅ 已移除封面頁（第1頁）與大綱頁（第2頁），只輸出內容頁
-
-            const forms = document.querySelectorAll('.tracking-form-instance');
-            let hasContent = false;
-
-            forms.forEach((form) => {
-                const fd = new FormData(form);
-
-                const productName = (fd.get('商品') || '').trim();
-                const phase = (fd.get('階段') || '').trim();
-
-                // 優先用「詳細類型」，若空則用「類型」
-                const optType = ((fd.get('詳細類型') || '').trim()) || ((fd.get('類型') || '').trim());
-
-                const description = (fd.get('項目說明') || '').trim();
-                const execution = (fd.get('執行說明') || '').trim();
-                const photoDataUrl = (fd.get('照片資料') || '').toString();
-
-                if (description !== '' || execution !== '') {
-                    hasContent = true;
-                    addProductionContentSlide(pptx, {
-                        phaseText: `參、${phase || '（階段）'}`,
-                        productName: productName || '商品名稱',
-                        optType: optType || '優化類型',
-                        desc1: description || '（說明）',
-                        desc2: execution || '（詳細說明）',
-                        photoDataUrl: (photoDataUrl && photoDataUrl.startsWith('data:image/')) ? photoDataUrl : ''
-                    });
-                }
-            });
-
-            if (!hasContent) {
-                alert('目前沒有任何表單填寫了「項目說明」或「執行說明」，因此未生成內容投影片。');
-                return;
-            }
-
-            // 將圖片以 contain 等比例置中實際塞入
-            await finalizeProductionImages(pptx);
-
-            await pptx.writeFile({ fileName: `製管會報告_${meetingDate.replace(/\//g, '')}.pptx` });
-        }
-
-        function openMobileTOC() {
-            const drawer = document.getElementById('mobile-toc-drawer');
-            const backdrop = document.getElementById('mobile-toc-backdrop');
-            if (!drawer || !backdrop) return;
-            backdrop.classList.remove('hidden');
-            drawer.classList.remove('-translate-x-full');
-            document.body.classList.add('overflow-hidden');
-        }
-        function closeMobileTOC() {
-            const drawer = document.getElementById('mobile-toc-drawer');
-            const backdrop = document.getElementById('mobile-toc-backdrop');
-            if (!drawer || !backdrop) return;
-            drawer.classList.add('-translate-x-full');
-            backdrop.classList.add('hidden');
-            document.body.classList.remove('overflow-hidden');
-        }
-        function cleanItemName(name) { return name.replace(/[\(（].*?[\)）]/g, '').trim(); }
-
-        function renderTOCInto(containerEl, forms) {
-            if (!containerEl) return;
-            containerEl.innerHTML = '';
-            if (forms.length === 0) {
-                containerEl.innerHTML = '<p class="text-sm text-gray-400">尚無項目可供追蹤。</p>';
-                return;
-            }
-            forms.forEach((form, index) => {
-                const suffix = form.id.split('-').pop();
-                const itemInput = form.querySelector(`#item_name-${suffix}`);
-                const rawItemName = itemInput ? itemInput.value : '';
-                const cleanedName = cleanItemName(rawItemName) || `(項目 #${index + 1}: 待填寫)`;
-                const targetId = form.id;
-
-                const link = document.createElement('a');
-                link.href = `#${targetId}`;
-                link.textContent = cleanedName;
-                link.className = 'block cursor-pointer p-2 text-sm font-medium text-gray-600 rounded-lg hover:bg-teal-50 hover:text-teal-700 transition duration-150 truncate';
-                link.title = rawItemName;
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    setActiveForm(targetId);
-                    closeMobileTOC();
-                });
-                containerEl.appendChild(link);
-            });
-        }
-
-        function updateTOC() {
-            const forms = Array.from(document.querySelectorAll('.tracking-form-instance'));
-            renderTOCInto(document.getElementById('toc-container-desktop'), forms);
-            renderTOCInto(document.getElementById('toc-container-mobile'), forms);
-            updatePagerUI();
-        }
-
-        function updateDetailedType(formElement, index) {
-            const issueTypeSelect = formElement.querySelector(`#issue_type-${index}`);
-            if (!issueTypeSelect) return;
-
-            const detailedTypeContainer = formElement.querySelector(`#detailed-type-container-${index}`);
-            const detailedTypeSelect = formElement.querySelector(`#detailed_type-${index}`);
-            const selectedType = issueTypeSelect.value;
-            const requiredDisplay = (selectedType in detailedOptionsMap && detailedOptionsMap[selectedType].length > 0);
-
-            if (requiredDisplay) {
-                detailedTypeContainer.classList.remove('hidden-collapse');
-                detailedTypeSelect.required = false;
-                populateSelect(detailedTypeSelect, detailedOptionsMap[selectedType], "(請選擇詳細類型)");
-            } else {
-                detailedTypeContainer.classList.add('hidden-collapse');
-                detailedTypeSelect.required = false;
-                detailedTypeSelect.value = '';
-            }
-        }
-
-        function updateConditionalFields(formElement, index) {
-            const issueTypeSelect = formElement.querySelector(`#issue_type-${index}`);
-            if (!issueTypeSelect) return;
-
-            const selectedType = issueTypeSelect.value;
-            const isException = selectedType === '異常';
-            const isOptimizationProposal = selectedType === '優化提案';
-
-            const respFactoryContainer = formElement.querySelector(`#responsible-factory-container-${index}`);
-            const respPartyContainer = formElement.querySelector(`#responsible-party-container-${index}`);
-            const respFactorySelect = formElement.querySelector(`#responsible_factory-${index}`);
-            const respPartySelect = formElement.querySelector(`#responsible_party-${index}`);
-
-            if (isException) {
-                respFactoryContainer.classList.remove('hidden-collapse');
-                respPartyContainer.classList.remove('hidden-collapse');
-                respFactorySelect.required = false;
-                respPartySelect.required = false;
-            } else {
-                respFactoryContainer.classList.add('hidden-collapse');
-                respPartyContainer.classList.add('hidden-collapse');
-                respFactorySelect.required = false;
-                respPartySelect.required = false;
-                respFactorySelect.value = '';
-                respPartySelect.value = '';
-            }
-
-            const nonAdoptionContainer = formElement.querySelector(`#non-adoption-container-${index}`);
-            const nonAdoptionTextarea = formElement.querySelector(`#reason_for_non_adoption-${index}`);
-
-            if (isOptimizationProposal) {
-                nonAdoptionContainer.classList.remove('hidden-collapse');
-                nonAdoptionTextarea.required = false;
-            } else {
-                nonAdoptionContainer.classList.add('hidden-collapse');
-                nonAdoptionTextarea.required = false;
-                nonAdoptionTextarea.value = '';
-            }
-        }
-
-        function reIndexForms() {
-            const forms = document.querySelectorAll('.tracking-form-instance');
-            forms.forEach((form, newIndex) => {
-                const titleElement = form.querySelector('.form-title');
-                if (titleElement) titleElement.textContent = `試產資訊 #${newIndex + 1}`;
-            });
-        }
-
-        function removeFormInstance(formElement) {
-            const wasActive = formElement.classList.contains('is-active');
-            const allBefore = Array.from(document.querySelectorAll('.tracking-form-instance'));
-            const removeIndex = allBefore.indexOf(formElement);
-
-            formElement.remove();
-
-            const forms = Array.from(document.querySelectorAll('.tracking-form-instance'));
-            if (forms.length === 0) {
-                cloneAndInitializeForm();
-                return;
-            }
-
-            if (wasActive) {
-                const nextCandidate = forms[Math.min(removeIndex, forms.length - 1)] || forms[0];
-                setActiveForm(nextCandidate.id);
-            }
-
-            reIndexForms();
-            updateTOC();
-        }
-
-        function initializeFormInstance(formElement, index, dataToPreFill = {}) {
-            formElement.classList.add('form-page');
-            formElement.id = `tracking-form-instance-${index}`;
-
-            const titleElement = formElement.querySelector('.form-title');
-            if (titleElement) titleElement.textContent = `試產資訊 #${document.querySelectorAll('.tracking-form-instance').length}`;
-
-            const suffix = `-${index}`;
-            formElement.querySelectorAll('[id], [for]').forEach(el => {
-                if (el.id && !el.id.endsWith(suffix)) el.id += suffix;
-                if (el.hasAttribute('for') && !el.getAttribute('for').endsWith(suffix)) el.setAttribute('for', el.getAttribute('for') + suffix);
-            });
-
-            const selectMap = {
-                'category': { options: dropdownOptions['品類'], default: "(請選擇)" },
-                'phase': { options: dropdownOptions['階段'], default: "(請選擇)" },
-                'main_factory': { options: dropdownOptions['工廠列表'], default: "(請選擇)" },
-                'sub_factory': { options: dropdownOptions['工廠列表'], default: "(無)" },
-                'issue_type': { options: dropdownOptions['類型'], default: "(請選擇)" },
-                'responsible_factory': { options: dropdownOptions['工廠列表'], default: "(無)" },
-                'responsible_party': { options: dropdownOptions['責任端'], default: "(無)" }
-            };
-
-            Object.keys(selectMap).forEach(baseId => {
-                const selectEl = formElement.querySelector(`#${baseId}${suffix}`);
-                if (selectEl) populateSelect(selectEl, selectMap[baseId].options, selectMap[baseId].default);
-            });
-
-            if (dataToPreFill && Object.keys(dataToPreFill).length > 0) {
-                const fields = {
-                    'item_name': dataToPreFill.item_name,
-                    'meeting_date': dataToPreFill.meeting_date,
-                    'launch_date': dataToPreFill.launch_date,
-                    'category': dataToPreFill.category,
-                    'phase': dataToPreFill.phase,
-                    'main_factory': dataToPreFill.main_factory,
-                    'sub_factory': dataToPreFill.sub_factory || ''
-                };
-                for (const [key, value] of Object.entries(fields)) {
-                    if (value) {
-                        const input = formElement.querySelector(`#${key}${suffix}`);
-                        if (input) input.value = value;
-                    }
-                }
-            }
-
-            const issueTypeSelect = formElement.querySelector(`#issue_type${suffix}`);
-            if (issueTypeSelect) {
-                updateDetailedType(formElement, index);
-                updateConditionalFields(formElement, index);
-
-                issueTypeSelect.addEventListener('change', () => {
-                    updateDetailedType(formElement, index);
-                    updateConditionalFields(formElement, index);
-                });
-            }
-
-            const itemNameInput = formElement.querySelector(`#item_name${suffix}`);
-            if (itemNameInput) itemNameInput.addEventListener('input', updateTOC);
-
-            const removeBtn = formElement.querySelector('.remove-form-btn');
-            if (removeBtn) removeBtn.addEventListener('click', () => removeFormInstance(formElement));
-
-            const addLocalBtn = formElement.querySelector('.add-form-btn-local');
-            if (addLocalBtn) addLocalBtn.addEventListener('click', () => { cloneAndInitializeForm(); updateTOC(); });
-
-            const photoInput = formElement.querySelector(`#issue_photo${suffix}`);
-            if (photoInput) photoInput.addEventListener('change', () => handleIssuePhotoChange(formElement, index));
-        }
-
-        function cloneAndInitializeForm(dataToPreFill) {
-            const templateForm = document.getElementById('form-template');
-            const formsWrapper = document.getElementById('forms-wrapper');
-            const newForm = templateForm.cloneNode(true);
-            newForm.classList.remove('form-template');
-            newForm.classList.add('tracking-form-instance');
-            newForm.classList.add('form-page');
-
-            const currentForms = document.querySelectorAll('.tracking-form-instance');
-            formsWrapper.appendChild(newForm);
-
-            const uniqueIndex = formIndex++;
-            initializeFormInstance(newForm, uniqueIndex, dataToPreFill);
-
-            setActiveForm(newForm.id);
-
-            if (!dataToPreFill && currentForms.length > 0) {
-                const main = document.getElementById('main-container');
-                if (main) main.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-
-            reIndexForms();
-            updateTOC();
-        }
-
-        function convertToCSV(data) {
-            if (data.length === 0) return '';
-            const headerArray = outputHeaders.map(h => h.outputName);
-            const csvHeader = headerArray.map(key => `"${key.replace(/"/g, '""')}"`).join(',');
-
-            const csvRows = data.map(row => {
-                return headerArray.map(header => {
-                    let value = row[header] === undefined ? '' : String(row[header]);
-                    value = value.replace(/\n/g, ' ').replace(/"/g, '""');
-                    return `"${value}"`;
-                }).join(',');
-            }).join('\n');
-
-            return csvHeader + '\n' + csvRows;
-        }
-
-        // 原本保留的下載函式（若你未來要用，先不刪）
-        function downloadCSV(csvString, filename) {
-            const BOM = '\uFEFF';
-            const blob = new Blob([BOM + csvString], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            if (link.download !== undefined) {
-                const url = URL.createObjectURL(blob);
-                link.setAttribute("href", url);
-                link.setAttribute("download", filename);
-                link.style.visibility = 'hidden';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            }
-        }
-
-        // ✅ 上傳（避免 Failed to fetch / CORS）：使用 no-cors + text/plain
-        async function handleSubmission() {
-            const forms = document.querySelectorAll('.tracking-form-instance');
-            const allFormData = [];
-
-            if (forms.length === 0) {
-                alert('目前沒有任何表單資料可上傳。');
-                return;
-            }
-
-            // 1) 收集資料 -> allFormData（沿用既有 outputHeaders 規則）
-            forms.forEach((form) => {
-                const data = {};
-                const formData = new FormData(form);
-                const issueType = formData.get('類型');
-
-                outputHeaders.forEach(header => {
-                    const formName = header.formName;
-                    const outputName = header.outputName;
-                    let value = "";
-
-                    if (header.type === 'month_derived') {
-                        const dateValue = formData.get('會議日期');
-                        if (dateValue && dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                            const parts = dateValue.split('-');
-                            const dateObj = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
-                            value = dateObj.getUTCMonth() + 1;
-                        } else {
-                            value = "";
-                        }
-                    } else {
-                        value = formData.get(formName) ? String(formData.get(formName)).trim() : "";
-                        if (header.isConditional) {
-                            if (issueType !== header.conditionValue) value = "";
-                        }
-                    }
-
-                    data[outputName] = value ?? "";
-                });
-
-                allFormData.push(data);
-            });
-
-            // 2) 產生 CSV
-            const csvContent = convertToCSV(allFormData);
-
-            // 3) 檔名：優先用第一筆會議日期（YYYYMMDD），否則用今日
-            let meetingDate = "";
-            const first = forms[0];
-            if (first) {
-                const d = first.querySelector('input[name="會議日期"]');
-                if (d && d.value) meetingDate = d.value.replace(/-/g, '');
-            }
-            const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-            const fileDate = meetingDate || today;
-            const filename = `製管會項目數據_${fileDate}.csv`;
-
-            if (!GAS_WEBAPP_URL) {
-                alert("尚未設定 GAS_WEBAPP_URL，請先貼上 Apps Script Web App URL。");
-                return;
-            }
-
-            // 4) CSV -> base64（UTF-8）
-            const base64 = btoa(unescape(encodeURIComponent(csvContent)));
-
-            // 5) UI：避免重複點擊
-            const btn = document.getElementById('submit-all-btn');
-            const originalText = btn ? btn.textContent : "上傳報表";
-            if (btn) { btn.disabled = true; btn.textContent = "上傳中..."; }
-
-            try {
-                // no-cors 會回傳 opaque response，但可避免 CORS preflight 導致 Failed to fetch
-                await fetch(GAS_WEBAPP_URL, {
-                    method: "POST",
-                    mode: "no-cors",
-                    headers: { "Content-Type": "text/plain;charset=utf-8" },
-                    body: JSON.stringify({
-                        token: GAS_TOKEN,
-                        filename,
-                        base64: "data:text/csv;base64," + base64
-                    })
-                });
-
-                alert("已送出上傳請求。請到 Google Drive 目標資料夾確認檔案是否已新增。");
-
-                // 6) 顯示 CSV 內容（不含連結，因為 no-cors 無法讀取回傳）
-                const outputSection = document.getElementById('output-section');
-                const formOutput = document.getElementById('form-output');
-                const formCountOutput = document.getElementById('form-count-output');
-
-                if (formCountOutput) formCountOutput.textContent = allFormData.length;
-
-                const text = "（已送出上傳請求；此模式因 CORS 限制無法顯示 Drive 連結）\n\n" + csvContent;
-                if (formOutput) formOutput.textContent = text;
-
-                if (outputSection) {
-                    outputSection.classList.remove('hidden');
-                    outputSection.scrollIntoView({ behavior: 'smooth' });
-                }
-
-            } catch (err) {
-                alert("上傳失敗：" + String(err && err.message ? err.message : err));
-            } finally {
-                if (btn) { btn.disabled = false; btn.textContent = originalText; }
-            }
-        }
-
-        function getFormsArray() {
-            return Array.from(document.querySelectorAll('.tracking-form-instance'));
-        }
-
-        function setActiveForm(targetId) {
-            const forms = getFormsArray();
-            if (forms.length === 0) return;
-
-            const target = document.getElementById(targetId) || forms[0];
-            forms.forEach(f => f.classList.remove('is-active'));
-            target.classList.add('is-active');
-
-            updatePagerUI();
-
-            const main = document.getElementById('main-container');
-            if (main) main.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-
-        function updatePagerUI() {
-            const forms = getFormsArray();
-            const indicator = document.getElementById('pager-indicator');
-            const prevBtn = document.getElementById('prev-form-btn');
-            const nextBtn = document.getElementById('next-form-btn');
-
-            if (!indicator || !prevBtn || !nextBtn) return;
-
-            const activeIndex = Math.max(0, forms.findIndex(f => f.classList.contains('is-active')));
-            const total = forms.length;
-            const current = total === 0 ? 0 : activeIndex + 1;
-
-            indicator.textContent = `目前：${current} / ${total}`;
-            prevBtn.disabled = (total === 0 || activeIndex <= 0);
-            nextBtn.disabled = (total === 0 || activeIndex >= total - 1);
-        }
-
-        function goPrevForm() {
-            const forms = getFormsArray();
-            if (forms.length === 0) return;
-            const activeIndex = forms.findIndex(f => f.classList.contains('is-active'));
-            const target = forms[Math.max(0, activeIndex - 1)] || forms[0];
-            setActiveForm(target.id);
-        }
-
-        function goNextForm() {
-            const forms = getFormsArray();
-            if (forms.length === 0) return;
-            const activeIndex = forms.findIndex(f => f.classList.contains('is-active'));
-            const target = forms[Math.min(forms.length - 1, activeIndex + 1)] || forms[forms.length - 1];
-            setActiveForm(target.id);
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            const openBtn = document.getElementById('mobile-toc-open-btn');
-            const closeBtn = document.getElementById('mobile-toc-close-btn');
-            const backdrop = document.getElementById('mobile-toc-backdrop');
-            if (openBtn) openBtn.addEventListener('click', openMobileTOC);
-            if (closeBtn) closeBtn.addEventListener('click', closeMobileTOC);
-            if (backdrop) backdrop.addEventListener('click', closeMobileTOC);
-
-            if (preloadedData && preloadedData.length > 0) {
-                preloadedData.forEach(data => cloneAndInitializeForm(data));
-            } else {
-                cloneAndInitializeForm();
-            }
-
-            const forms = getFormsArray();
-            if (forms.length > 0) {
-                // 預設顯示第一筆
-                setActiveForm(forms[0].id);
-            }
-
-            updateTOC();
-
-            const prevBtn = document.getElementById('prev-form-btn');
-            const nextBtn = document.getElementById('next-form-btn');
-            if (prevBtn) prevBtn.addEventListener('click', goPrevForm);
-            if (nextBtn) nextBtn.addEventListener('click', goNextForm);
-
-            const submitBtn = document.getElementById('submit-all-btn');
-            if (submitBtn) submitBtn.addEventListener('click', handleSubmission);
-
-            const pptBtn = document.getElementById('download-ppt-btn');
-            if (pptBtn) pptBtn.addEventListener('click', () => generatePPT());
+        nameInput.addEventListener('input', (e) => {
+          setRecord({ name: e.target.value || '' });
+          updateTabLabel(idx);
+          updatePanelTitle(panel, idx);
         });
-    </script>
+
+        descInput.addEventListener('input', (e) => setRecord({ desc: e.target.value || '' }));
+
+        // 顯示排關圖
+        const showPdfBtn = panel.querySelector('.showPdfBtn');
+        if (showPdfBtn) {
+          showPdfBtn.addEventListener('click', () => {
+            const productName = (state.records[idx].name || '').trim();
+            const pdfItem = findPdfForProductName(productName);
+            openPdfModal(productName || displayName(state.records[idx], idx), pdfItem);
+          });
+        }
+
+
+        imgInput.addEventListener('change', async (e) => {
+          const files = Array.from((e.target && e.target.files) ? e.target.files : []);
+          if (!files.length) return;
+
+          const imgs = [];
+          for (const f of files) {
+            const dataUrl = await fileToDataUrl(f);
+            const size = await getImageSize(dataUrl);
+            imgs.push({ name: f.name, dataUrl, width: size.width, height: size.height });
+          }
+
+          const merged = (state.records[idx].images || []).concat(imgs);
+          setRecord({ images: merged });
+
+          imgHint.textContent = `已選擇 ${merged.length} 張圖片。`;
+          renderImagePreview(imgPreview, merged);
+
+          e.target.value = '';
+        });
+
+        $('.clearImgsBtn', panel).addEventListener('click', () => {
+          setRecord({ images: [] });
+          imgHint.textContent = '尚未選擇圖片。';
+          imgPreview.innerHTML = '';
+        });
+
+        $('.addBtn', panel).addEventListener('click', () => addForm());
+        $('.dupBtn', panel).addEventListener('click', () => duplicateAt(idx));
+        $('.delBtn', panel).addEventListener('click', () => removeAt(idx));
+
+        panelsEl.appendChild(node);
+      });
+
+      setActive(Math.min(state.active, state.records.length - 1), { scrollTabIntoView: false });
+
+      // Keep floating catalog button aligned under tab row
+      schedulePositionCatalogBtn();
+    }
+
+    // ---------------- PPTX Export: match template ----------------
+    // NOTE: PptxGenJS is loaded dynamically on click to avoid "button no effect" when CDN fails.
+
+    const TPL = {
+      slideW: 10,
+      slideH: 7.5,
+
+      // Master decorations (from 公版：訪廠問題表格.pptx)
+      decor: {
+        // two stripes at top and bottom
+        x: 0.1076389,
+        w: 9.8263889,
+        topGreenY: 0.4947922,
+        topBlueY: 0.5420770,
+        bottomGreenY: 7.2582707,
+        bottomBlueY: 7.3055556,
+        green: '008000',
+        blue:  '3366FF',
+        lineW: 2
+      },
+
+      footer: {
+        text: '本文件為「全家便利商店股份有限公司」所有，請勿外洩',
+        x: 3.4302592,
+        y: 7.2586811,
+        w: 4.0104167,
+        h: 0.2690967,
+        font: '標楷體',
+        size: 10,
+        color: '000000'
+      },
+
+      impl: {
+        x: 7.9074059,
+        y: 0.6485466,
+        w: 1.9069543,
+        h: 0.4882951,
+        fill: 'FFF2CC',
+        line: '2D4D6A',
+        font: 'Microsoft JhengHei',
+        size: 18,
+        color: '000000',
+        text: '實施日:'
+      },
+
+      title: { x: 0.128, y: 0.014, w: 9.785, h: 0.472, text: '一、調整說明', font: 'Meiryo UI', size: 18, color: '000000' },
+      bar:   { x: 0.227, y: 0.695, w: 9.587, h: 0.442, fill: '2E75B6', textColor: 'FFFF00', font: 'Microsoft JhengHei', size: 18 },
+
+      t1: {
+        x: 0.277, y: 1.183, w: 9.488, h: 3.545,
+        colW: 4.744, headH: 0.748, bodyH: 2.797,
+        headFill: 'DEEAF7',
+        border: '4A4E52',
+        sep: '414243',
+        headFont: 'Microsoft JhengHei',
+        headSize: 16
+      },
+
+      t2: {
+        x: 0.277, y: 4.728, w: 9.488, h: 2.478,
+        colW: 4.744, rowH: 0.62,
+        border: '000000',
+        font: 'Microsoft JhengHei',
+        size: 14
+      },
+
+      photoPad: 0.15
+    };
+
+    function formatExportError(err) {
+      const msg = err && err.message ? err.message : String(err);
+      return `PPT 匯出失敗：\n${msg}`;
+    }
+
+    function drawTemplate(slide, rec, pptx) {
+      // Background (white) — use shape for maximum compatibility
+      slide.addShape(pptx.ShapeType.rect, {
+        x: 0, y: 0, w: TPL.slideW, h: TPL.slideH,
+        fill: { color: 'FFFFFF' },
+        line: { color: 'FFFFFF', width: 0 }
+      });
+
+      
+      // Master top/bottom stripes (全家公版裝飾)
+      slide.addShape(pptx.ShapeType.line, {
+        x: TPL.decor.x, y: TPL.decor.topGreenY, w: TPL.decor.w, h: 0,
+        line: { color: TPL.decor.green, width: TPL.decor.lineW }
+      });
+      slide.addShape(pptx.ShapeType.line, {
+        x: TPL.decor.x, y: TPL.decor.topBlueY, w: TPL.decor.w, h: 0,
+        line: { color: TPL.decor.blue, width: TPL.decor.lineW }
+      });
+      slide.addShape(pptx.ShapeType.line, {
+        x: TPL.decor.x, y: TPL.decor.bottomGreenY, w: TPL.decor.w, h: 0,
+        line: { color: TPL.decor.green, width: TPL.decor.lineW }
+      });
+      slide.addShape(pptx.ShapeType.line, {
+        x: TPL.decor.x, y: TPL.decor.bottomBlueY, w: TPL.decor.w, h: 0,
+        line: { color: TPL.decor.blue, width: TPL.decor.lineW }
+      });
+
+      // Footer disclaimer text (master)
+      slide.addText(TPL.footer.text, {
+        x: TPL.footer.x, y: TPL.footer.y, w: TPL.footer.w, h: TPL.footer.h,
+        fontFace: TPL.footer.font, fontSize: TPL.footer.size,
+        color: TPL.footer.color, align: 'center', valign: 'mid'
+      });
+
+      
+
+
+
+slide.addText(TPL.title.text, {
+        x: TPL.title.x, y: TPL.title.y, w: TPL.title.w, h: TPL.title.h,
+        fontFace: TPL.title.font, fontSize: TPL.title.size, color: TPL.title.color,
+        valign: 'mid', align: 'left'
+      });
+
+      slide.addShape(pptx.ShapeType.rect, {
+        x: TPL.bar.x, y: TPL.bar.y, w: TPL.bar.w, h: TPL.bar.h,
+        fill: { color: TPL.bar.fill }, line: { color: TPL.bar.fill, width: 0 }
+      });
+
+      const typeTxt = (rec.type || '【類型】').trim();
+      const nameTxt = (rec.name || '【商品名】').trim();
+
+      // Header text: 類型 = 黃色；商品名 = 白色（避免整段都黃）
+      const headerRuns = [
+        { text: typeTxt, options: { color: 'FFFF00', bold: true } },
+        { text: '-',      options: { color: 'FFFFFF', bold: true } },
+        { text: nameTxt,  options: { color: 'FFFFFF', bold: true } },
+      ];
+
+      // PptxGenJS v3 supports rich text runs (array). If not, fall back to two text boxes.
+      try {
+        slide.addText(headerRuns, {
+          x: TPL.bar.x, y: TPL.bar.y, w: TPL.bar.w, h: TPL.bar.h,
+          fontFace: TPL.bar.font, fontSize: TPL.bar.size,
+          align: 'center', valign: 'mid'
+        });
+      } catch (e) {
+        // Fallback: approximate centering by splitting the bar into two regions
+        slide.addText(typeTxt, {
+          x: TPL.bar.x, y: TPL.bar.y, w: TPL.bar.w * 0.35, h: TPL.bar.h,
+          fontFace: TPL.bar.font, fontSize: TPL.bar.size, bold: true,
+          color: 'FFFF00', align: 'right', valign: 'mid'
+        });
+        slide.addText('-' + nameTxt, {
+          x: TPL.bar.x + TPL.bar.w * 0.35, y: TPL.bar.y, w: TPL.bar.w * 0.65, h: TPL.bar.h,
+          fontFace: TPL.bar.font, fontSize: TPL.bar.size, bold: true,
+          color: 'FFFFFF', align: 'left', valign: 'mid'
+        });
+      }
+const t1 = TPL.t1;
+
+      slide.addShape(pptx.ShapeType.rect, {
+        x: t1.x, y: t1.y, w: t1.w, h: t1.h,
+        fill: { color: 'FFFFFF', transparency: 100 },
+        line: { color: t1.border, width: 1 }
+      });
+
+      slide.addShape(pptx.ShapeType.rect, {
+        x: t1.x, y: t1.y, w: t1.colW, h: t1.headH,
+        fill: { color: t1.headFill }, line: { color: t1.border, width: 1 }
+      });
+      slide.addShape(pptx.ShapeType.rect, {
+        x: t1.x + t1.colW, y: t1.y, w: t1.colW, h: t1.headH,
+        fill: { color: t1.headFill }, line: { color: t1.border, width: 1 }
+      });
+
+      slide.addShape(pptx.ShapeType.line, {
+        x: t1.x + t1.colW, y: t1.y, w: 0, h: t1.h,
+        line: { color: '000000', width: 1 }
+      });
+
+      slide.addShape(pptx.ShapeType.line, {
+        x: t1.x, y: t1.y + t1.headH, w: t1.w, h: 0,
+        line: { color: t1.sep, width: 1 }
+      });
+
+      slide.addText('改善前', {
+        x: t1.x, y: t1.y, w: t1.colW, h: t1.headH,
+        fontFace: t1.headFont, fontSize: t1.headSize, bold: true,
+        color: '000000', align: 'center', valign: 'mid'
+      });
+      slide.addText('改善後', {
+        x: t1.x + t1.colW, y: t1.y, w: t1.colW, h: t1.headH,
+        fontFace: t1.headFont, fontSize: t1.headSize, bold: true,
+        color: '000000', align: 'center', valign: 'mid'
+      });
+
+      const t2 = TPL.t2;
+
+      slide.addShape(pptx.ShapeType.rect, {
+        x: t2.x, y: t2.y, w: t2.w, h: t2.h,
+        fill: { color: 'FFFFFF', transparency: 100 },
+        line: { color: t2.border, width: 1 }
+      });
+
+      slide.addShape(pptx.ShapeType.line, {
+        x: t2.x + t2.colW, y: t2.y, w: 0, h: t2.h,
+        line: { color: t2.border, width: 1 }
+      });
+
+      // 橫線：只畫右側 PDCA 區（左側回答框不畫橫線）
+      const rightX = t2.x + t2.colW;
+      const rightW = t2.w - t2.colW;
+      for (let i = 1; i <= 3; i++) {
+        slide.addShape(pptx.ShapeType.line, {
+          x: rightX,
+          y: t2.y + t2.rowH * i,
+          w: rightW,
+          h: 0,
+          line: { color: t2.border, width: 1 }
+        });
+      }
+
+      // 左上標籤：只保留「P(問題)」，並稍微下移避免貼邊
+      slide.addText('P(問題)', {
+        x: t2.x + 0.10,
+        y: t2.y + 0.06,
+        w: t2.colW - 0.20,
+        h: 0.35,
+        fontFace: t2.font,
+        fontSize: t2.size,
+        color: '000000',
+        align: 'left',
+        valign: 'top'
+      });
+
+      const pdca = ['P：', 'D：', 'C：', 'A：'];
+      pdca.forEach((lab, i) => {
+        slide.addText(lab, {
+          x: t2.x + t2.colW + 0.12, y: t2.y + t2.rowH * i,
+          w: t2.colW - 0.24, h: t2.rowH,
+          fontFace: t2.font, fontSize: t2.size, color: '000000',
+          align: 'left', valign: 'mid'
+        });
+      });
+
+      const desc = (rec.desc || '').trim();
+      if (desc) {
+        // 左側回答框：整塊空白區（無橫線），文字從標籤下方開始
+        slide.addText(desc, {
+          x: t2.x + 0.12,
+          y: t2.y + 0.48,
+          w: t2.colW - 0.24,
+          h: t2.h - 0.60,
+          fontFace: t2.font,
+          fontSize: 12,
+          color: '111111',
+          align: 'left',
+          valign: 'top'
+        });
+      }
+
+      // 實施日（置頂顯示：確保在所有圖層最上方）
+      // 實施日（表單不填寫；PPT 保留給對方填）
+            slide.addShape(pptx.ShapeType.roundRect, {
+              x: TPL.impl.x, y: TPL.impl.y, w: TPL.impl.w, h: TPL.impl.h,
+              fill: { color: TPL.impl.fill },
+              line: { color: TPL.impl.line, width: 1 }
+            });
+            slide.addText(TPL.impl.text, {
+              x: TPL.impl.x + 0.10, y: TPL.impl.y, w: TPL.impl.w - 0.20, h: TPL.impl.h,
+              fontFace: TPL.impl.font, fontSize: TPL.impl.size,
+              color: TPL.impl.color, align: 'left', valign: 'mid'
+            });
+
+}
+
+    function addPhotos(slide, pair) {
+      if (!pair || (!pair[0] && !pair[1])) return;
+
+      const t1 = TPL.t1;
+      const bodyY = t1.y + t1.headH;
+      const pad = TPL.photoPad;
+
+      const leftBox  = { x: t1.x + pad,           y: bodyY + pad, w: t1.colW - pad * 2, h: t1.bodyH - pad * 2 };
+      const rightBox = { x: t1.x + t1.colW + pad, y: bodyY + pad, w: t1.colW - pad * 2, h: t1.bodyH - pad * 2 };
+
+      const put = (img, box) => {
+        if (!img) return;
+        slide.addImage({
+          data: img.dataUrl,
+          x: box.x, y: box.y, w: box.w, h: box.h,
+          sizing: { type: 'contain', x: box.x, y: box.y, w: box.w, h: box.h }
+        });
+      };
+
+      put(pair[0], leftBox);
+      put(pair[1], rightBox);
+    }
+
+    async function exportPPT() {
+      // Ensure library available; otherwise show actionable error
+      const ok = await ensurePptxGenLoaded();
+      if (!ok || !window.PptxGenJS) {
+        alert('無法載入 PPT 匯出元件（PptxGenJS）。\n\n可能原因：網路環境封鎖 CDN 或離線。\n解法：\n1) 改用可連外的網路開啟此頁；或\n2) 下載 pptxgen.bundle.js 放在此 HTML 同一資料夾（離線模式）。');
+        return;
+      }
+
+      if (!state.records.length) { alert('目前沒有資料可匯出。'); return; }
+
+      const hasAny = state.records.some(r => (r.type || r.name || r.desc || (r.images && r.images.length)));
+      if (!hasAny) { alert('資料皆為空白，請至少填寫一筆內容或上傳圖片。'); return; }
+
+      let pptx;
+      try {
+        pptx = new window.PptxGenJS();
+        pptx.layout = 'LAYOUT_4x3';
+      } catch (e) {
+        alert(formatExportError(e));
+        return;
+      }
+
+      for (const rec of state.records) {
+        const imgs = rec.images || [];
+        const pages = imgs.length ? chunk(imgs, 2) : [ [] ];
+        pages.forEach((pair) => {
+          const slide = pptx.addSlide();
+          drawTemplate(slide, rec, pptx);
+          addPhotos(slide, pair);
+        });
+      }
+
+      const fnDate = todayISO().split('-').join('');
+      const filename = `訪廠問題表格_${fnDate}.pptx`;
+
+      try {
+        await pptx.writeFile({ fileName: filename });
+      } catch (err) {
+        console.error(err);
+        alert(formatExportError(err));
+      }
+    }
+
+    // ---------------- Catalog ----------------
+    function openCatalog() {
+      const modal = $('#catalogModal');
+      const list = $('#catalogList');
+      list.innerHTML = '';
+
+      state.records.forEach((rec, idx) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'w-full text-left rounded-xl border px-3 py-3 hover:bg-slate-50 flex items-center justify-between gap-3';
+        const name = displayName(rec, idx);
+        const sub = (rec.type || '').trim();
+        btn.innerHTML = `
+          <div class="min-w-0">
+            <div class="text-sm font-semibold truncate">${name}</div>
+            <div class="text-xs text-slate-500 truncate">${sub ? sub : ''}</div>
+          </div>
+          <div class="text-xs text-slate-400 shrink-0">第 ${idx + 1} 筆</div>
+        `;
+        btn.addEventListener('click', () => {
+          closeCatalog();
+          setActive(idx);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        list.appendChild(btn);
+      });
+
+      modal.classList.remove('hidden');
+      document.body.classList.add('overflow-hidden');
+    }
+
+    function closeCatalog() {
+      const modal = $('#catalogModal');
+      modal.classList.add('hidden');
+      document.body.classList.remove('overflow-hidden');
+    }
+
+    
+    function positionCatalogBtn() {
+      const btn = document.getElementById('catalogBtn');
+      const bar = document.getElementById('tabsBar');
+      const tabs = document.getElementById('tabs');
+      if (!btn || !bar || !tabs) return;
+
+      const barRect = bar.getBoundingClientRect();
+      const tabsRect = tabs.getBoundingClientRect();
+
+      // Align to the left edge of the tab strip; place just below the tabs bar
+      const left = Math.max(8, Math.round(tabsRect.left));
+      const top = Math.round(barRect.bottom + 8);
+
+      btn.style.left = left + 'px';
+      btn.style.top = top + 'px';
+    }
+
+    let _posRaf = 0;
+    function schedulePositionCatalogBtn() {
+      if (_posRaf) return;
+      _posRaf = requestAnimationFrame(() => {
+        _posRaf = 0;
+        positionCatalogBtn();
+      });
+    }
+
+    // ---------------- Init ----------------
+    $('#addRowBtn').addEventListener('click', () => addForm());
+    $('#exportBtn').addEventListener('click', exportPPT);
+
+
+    // PDF import buttons
+    const pdfInputEl = document.getElementById('pdfInput');
+    const hookImport = () => { if (pdfInputEl) pdfInputEl.click(); };
+
+    const importBtnHeader = document.getElementById('importPdfBtnHeader');
+    if (importBtnHeader) importBtnHeader.addEventListener('click', hookImport);
+
+    if (pdfInputEl) {
+      pdfInputEl.addEventListener('change', async (e) => {
+        const files = Array.from((e.target && e.target.files) ? e.target.files : []);
+        await importPdfFiles(files);
+        e.target.value = '';
+      });
+    }
+
+    // PDF modal close
+    const closePdfBtn = document.getElementById('closePdfBtn');
+    if (closePdfBtn) closePdfBtn.addEventListener('click', closePdfModal);
+    const pdfModal = document.getElementById('pdfModal');
+    if (pdfModal) {
+      pdfModal.addEventListener('click', (e) => {
+        const t = e.target;
+        if (t && t.dataset && t.dataset.closePdf === 'true') closePdfModal();
+      });
+    }
+
+    // Fallback: delegated close handling (works even if modal DOM is injected after scripts)
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      if (!target) return;
+
+      // Close button
+      if (target.closest && target.closest('#closePdfBtn')) {
+        closePdfModal();
+        return;
+      }
+
+      // Click on backdrop
+      if (target.dataset && target.dataset.closePdf === 'true') {
+        closePdfModal();
+        return;
+      }
+    });
+
+
+
+    $('#dupActiveBtn').addEventListener('click', () => duplicateAt(state.active));
+    $('#delActiveBtn').addEventListener('click', () => removeAt(state.active));
+
+    $('#catalogBtn').addEventListener('click', openCatalog);
+    $('#closeCatalogBtn').addEventListener('click', closeCatalog);
+    $('#catalogModal').addEventListener('click', (e) => {
+      const t = e.target;
+      if (t && t.dataset && t.dataset.close === 'true') closeCatalog();
+    });
+
+    window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeCatalog(); closePdfModal(); } });
+
+    window.addEventListener('resize', schedulePositionCatalogBtn);
+    window.addEventListener('scroll', schedulePositionCatalogBtn, { passive: true });
+
+    // Start
+    state.records = [ makeEmptyRecord() ];
+    renderAll();
+    schedulePositionCatalogBtn();
+  </script>
+
+  <!-- PDF modal (排關圖) -->
+  <div id="pdfModal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/40" data-close-pdf="true"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-3">
+      <div class="w-full max-w-5xl rounded-2xl bg-white shadow-xl overflow-hidden">
+        <div class="flex items-center justify-between gap-3 px-4 py-3 border-b">
+          <div class="min-w-0">
+            <div class="text-sm font-semibold">排關圖</div>
+            <div id="pdfTitle" class="text-xs text-slate-500 truncate">—</div>
+          </div>
+          <button id="closePdfBtn" class="rounded-xl border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">關閉</button>
+        </div>
+
+        <div class="p-3">
+          <div id="pdfEmpty" class="hidden rounded-xl border bg-slate-50 p-4 text-sm text-slate-700">
+            找不到符合「商品名」的排關圖。請先點「匯入排關圖」上傳 PDF，或確認商品名是否正確。
+            <div class="mt-3 text-xs text-slate-500">
+              已匯入清單：<span id="pdfListText">（無）</span>
+            </div>
+          </div>
+
+          <iframe id="pdfFrame" class="hidden w-full h-[75vh] rounded-xl border" title="排關圖 PDF"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
