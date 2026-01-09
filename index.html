@@ -443,6 +443,16 @@
       return !!(window.google && google.script && google.script.run);
     }
 
+    async function ensureAppsScriptBridge(maxMs = 1500) {
+      const start = Date.now();
+      while (Date.now() - start < maxMs) {
+        if (hasAppsScriptBridge()) return true;
+        // Some environments inject google.script slightly later
+        await new Promise(r => setTimeout(r, 150));
+      }
+      return hasAppsScriptBridge();
+    }
+
     function openDriveModal() {
       $('#driveFolderIdText').textContent = DRIVE_FOLDER_ID;
       $('#driveCountText').textContent = '0';
@@ -528,7 +538,8 @@
       $('#driveHint').classList.remove('text-rose-600');
       $('#driveHint').classList.add('text-slate-500');
 
-      if (!hasAppsScriptBridge()) {
+      const okBridge = await ensureAppsScriptBridge();
+      if (!okBridge) {
         $('#driveHint').textContent = '此頁面目前不是 Apps Script Web App 環境，無法直接從 Google Drive 讀取資料夾。請依部署指南將本頁部署到 Apps Script 後再使用此功能。';
         $('#driveHint').classList.add('text-rose-600');
         driveCache = [];
@@ -576,7 +587,8 @@
         alert('請先勾選要匯入的 PDF。');
         return;
       }
-      if (!hasAppsScriptBridge()) {
+      const okBridge = await ensureAppsScriptBridge();
+      if (!okBridge) {
         alert('此功能需要部署為 Apps Script Web App。');
         return;
       }
@@ -1308,7 +1320,23 @@ const t1 = TPL.t1;
       });
     }
 
-    const driveRefreshBtn = document.getElementById('driveRefreshBtn');
+    
+    // Fallback: delegated drive close handling (works even if modal DOM is after scripts)
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      if (!target) return;
+
+      if (target.closest && target.closest('#closeDriveBtn')) {
+        closeDriveModal();
+        return;
+      }
+      if (target.dataset && target.dataset.closeDrive === 'true') {
+        closeDriveModal();
+        return;
+      }
+    });
+
+const driveRefreshBtn = document.getElementById('driveRefreshBtn');
     if (driveRefreshBtn) driveRefreshBtn.addEventListener('click', loadDriveList);
 
     const driveSearch = document.getElementById('driveSearch');
