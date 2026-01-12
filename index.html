@@ -522,7 +522,7 @@ const ctx = prepareCanvasContext(canvas);
         // Tool mode: pen / eraser
         // - pen: normal ink
         // - eraser: removes ink (destination-out) so it works regardless of background color
-        const tool = (state.records[idx] && state.records[idx].notesTool) ? state.records[idx].notesTool : 'pen';
+        const tool = (canvas.dataset.notesTool || ((state.records[idx] && state.records[idx].notesTool) ? state.records[idx].notesTool : 'pen'));
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         if (tool === 'eraser') {
@@ -1332,10 +1332,12 @@ async function importSelectedFromDrive() {
 
         // ---- Notes helpers (define BEFORE use) ----
         const getNotesTool = () => (state.records[idx] && state.records[idx].notesTool) ? state.records[idx].notesTool : 'pen';
-        const setNotesTool = (tool) => setRecord({ notesTool: tool });
+
+        // Keep tool state local to this panel; only explicit button clicks may change it.
+        let notesToolLocal = getNotesTool();
 
         const syncNotesToolUI = () => {
-          const tool = getNotesTool();
+          const tool = notesToolLocal;
           if (notesPenBtn) {
             notesPenBtn.classList.toggle('is-active', tool === 'pen');
             notesPenBtn.setAttribute('aria-pressed', tool === 'pen' ? 'true' : 'false');
@@ -1344,6 +1346,15 @@ async function importSelectedFromDrive() {
             notesEraserBtn.classList.toggle('is-active', tool === 'eraser');
             notesEraserBtn.setAttribute('aria-pressed', tool === 'eraser' ? 'true' : 'false');
           }
+        };
+
+        const applyNotesTool = (tool) => {
+          const next = (tool === 'eraser') ? 'eraser' : 'pen';
+          if (notesToolLocal === next) return;
+          notesToolLocal = next;
+          setRecord({ notesTool: notesToolLocal });
+          if (notesCanvas) notesCanvas.dataset.notesTool = notesToolLocal;
+          syncNotesToolUI();
         };
 
         // Panel title
@@ -1362,6 +1373,8 @@ async function importSelectedFromDrive() {
           const savedH = (state.records[idx] && state.records[idx].notesBoxH) ? Number(state.records[idx].notesBoxH) : 0;
           if (boxEl && savedH && savedH > 0) boxEl.style.height = savedH + 'px';
 
+          // Ensure canvas always knows the current tool (prevents any unexpected tool reset)
+          notesCanvas.dataset.notesTool = notesToolLocal;
           initNotesCanvas(notesCanvas, idx);
 
           // Restore saved ink or clear
@@ -1377,20 +1390,24 @@ async function importSelectedFromDrive() {
         }
 
         if (notesPenBtn || notesEraserBtn) {
+          // Initialize UI from current record state (per panel)
+          notesToolLocal = getNotesTool();
           syncNotesToolUI();
         }
+
         if (notesPenBtn) {
-          notesPenBtn.addEventListener('click', () => {
-            if (getNotesTool() === 'pen') return;
-            setNotesTool('pen');
-            syncNotesToolUI();
+          notesPenBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+          notesPenBtn.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            applyNotesTool('pen');
           });
         }
+
         if (notesEraserBtn) {
-          notesEraserBtn.addEventListener('click', () => {
-            if (getNotesTool() === 'eraser') return;
-            setNotesTool('eraser');
-            syncNotesToolUI();
+          notesEraserBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+          notesEraserBtn.addEventListener('click', (e) => {
+            e.preventDefault(); e.stopPropagation();
+            applyNotesTool('eraser');
           });
         }
 
@@ -1724,16 +1741,8 @@ const t1 = TPL.t1;
           align: 'left', valign: 'mid'
         });
       });
-
-      const notesText = (rec.notesText || '').trim();
-      const descRaw = (rec.desc || '').trim();
-      let desc = '';
-      if (notesText && descRaw) desc = `內容記錄：${notesText}
-
-問題說明：${descRaw}`;
-      else if (notesText) desc = notesText;
-      else desc = descRaw;
-      if (desc) {
+      const desc = (rec.desc || '').trim();
+if (desc) {
         // 左側回答框：整塊空白區（無橫線），文字從標籤下方開始
         slide.addText(desc, {
           x: t2.x + 0.12,
@@ -1762,6 +1771,125 @@ const t1 = TPL.t1;
             });
 
 }
+    function drawNotesSlide(slide, rec, pptx) {
+      // Master background + stripes + footer (same as main)
+      slide.addShape(pptx.ShapeType.rect, {
+        x: 0, y: 0, w: TPL.slideW, h: TPL.slideH,
+        fill: { color: 'FFFFFF' },
+        line: { color: 'FFFFFF', width: 0 }
+      });
+
+      // Stripes
+      slide.addShape(pptx.ShapeType.line, {
+        x: TPL.decor.x, y: TPL.decor.topGreenY, w: TPL.decor.w, h: 0,
+        line: { color: TPL.decor.green, width: TPL.decor.lineW }
+      });
+      slide.addShape(pptx.ShapeType.line, {
+        x: TPL.decor.x, y: TPL.decor.topBlueY, w: TPL.decor.w, h: 0,
+        line: { color: TPL.decor.blue, width: TPL.decor.lineW }
+      });
+      slide.addShape(pptx.ShapeType.line, {
+        x: TPL.decor.x, y: TPL.decor.bottomGreenY, w: TPL.decor.w, h: 0,
+        line: { color: TPL.decor.green, width: TPL.decor.lineW }
+      });
+      slide.addShape(pptx.ShapeType.line, {
+        x: TPL.decor.x, y: TPL.decor.bottomBlueY, w: TPL.decor.w, h: 0,
+        line: { color: TPL.decor.blue, width: TPL.decor.lineW }
+      });
+
+      // Footer
+      slide.addText(TPL.footer.text, {
+        x: TPL.footer.x, y: TPL.footer.y, w: TPL.footer.w, h: TPL.footer.h,
+        fontFace: TPL.footer.font, fontSize: TPL.footer.size,
+        color: TPL.footer.color, align: 'center', valign: 'mid'
+      });
+
+      // Title
+      slide.addText('內容記錄', {
+        x: 0.128, y: 0.06, w: 9.785, h: 0.5,
+        fontFace: 'Microsoft JhengHei', fontSize: 24, bold: true,
+        color: '000000', align: 'left', valign: 'mid'
+      });
+
+      const text = (rec.notesText || '').trim();
+      const ink  = (rec.notesInk  || '').trim();
+
+      // Main notes box
+      const box = { x: 0.227, y: 0.75, w: 9.587, h: 6.35 };
+
+      // Outer border
+      slide.addShape(pptx.ShapeType.rect, {
+        x: box.x, y: box.y, w: box.w, h: box.h,
+        fill: { color: 'FFFFFF', transparency: 100 },
+        line: { color: '000000', width: 1 }
+      });
+
+      // Helper: add typed text area
+      const addTyped = (x, y, w, h) => {
+        if (!text) return;
+        slide.addText(text, {
+          x, y, w, h,
+          fontFace: 'Microsoft JhengHei',
+          fontSize: 14,
+          color: '111111',
+          align: 'left',
+          valign: 'top'
+        });
+      };
+
+      // Helper: add ink image area
+      const addInk = (x, y, w, h) => {
+        if (!ink) return;
+        slide.addImage({
+          data: ink,
+          x, y, w, h,
+          sizing: { type: 'contain', x, y, w, h }
+        });
+      };
+
+      // Layout rules:
+      // - text+ink: split left/right
+      // - only text: full box
+      // - only ink: full box
+      if (text && ink) {
+        const midX = box.x + box.w / 2;
+
+        // Divider
+        slide.addShape(pptx.ShapeType.line, {
+          x: midX, y: box.y, w: 0, h: box.h,
+          line: { color: '000000', width: 1 }
+        });
+
+        // Small labels
+        slide.addText('內容記錄（打字）', {
+          x: box.x + 0.12, y: box.y + 0.05, w: box.w / 2 - 0.24, h: 0.3,
+          fontFace: 'Microsoft JhengHei', fontSize: 12, color: '444444',
+          align: 'left', valign: 'mid'
+        });
+        slide.addText('內容記錄（手寫）', {
+          x: midX + 0.12, y: box.y + 0.05, w: box.w / 2 - 0.24, h: 0.3,
+          fontFace: 'Microsoft JhengHei', fontSize: 12, color: '444444',
+          align: 'left', valign: 'mid'
+        });
+
+        // Content regions
+        addTyped(box.x + 0.12, box.y + 0.40, box.w / 2 - 0.24, box.h - 0.52);
+        addInk(midX + 0.12, box.y + 0.40, box.w / 2 - 0.24, box.h - 0.52);
+      } else if (text) {
+        addTyped(box.x + 0.12, box.y + 0.12, box.w - 0.24, box.h - 0.24);
+      } else if (ink) {
+        addInk(box.x + 0.12, box.y + 0.12, box.w - 0.24, box.h - 0.24);
+      } else {
+        // Keep the placeholder center text when both empty
+        slide.addText('(內容記錄)', {
+          x: box.x, y: box.y + box.h / 2 - 0.25, w: box.w, h: 0.5,
+          fontFace: 'Microsoft JhengHei', fontSize: 18,
+          color: '555555', align: 'center', valign: 'mid'
+        });
+      }
+    }
+
+
 
     function addPhotos(slide, pair) {
       if (!pair || (!pair[0] && !pair[1])) return;
@@ -1816,9 +1944,15 @@ const t1 = TPL.t1;
           drawTemplate(slide, rec, pptx);
           addPhotos(slide, pair);
         });
-      }
 
-      const fnDate = todayISO().split('-').join('');
+        // 額外：內容記錄（打字/手寫）— 若任一有內容，新增一張「內容記錄」投影片
+        const hasNotesText = ((rec.notesText || '').trim().length > 0);
+        const hasNotesInk  = ((rec.notesInk  || '').trim().length > 0);
+        if (hasNotesText || hasNotesInk) {
+          const nslide = pptx.addSlide();
+          drawNotesSlide(nslide, rec, pptx);
+        }
+      }const fnDate = todayISO().split('-').join('');
       const filename = `訪廠問題表格_${fnDate}.pptx`;
 
       try {
