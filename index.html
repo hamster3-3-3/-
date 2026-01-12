@@ -773,10 +773,16 @@ function buildDriveOpenUrl(fileId) {
       return out;
     }
 
-    async function importSelectedFromDrive() {
+    let __driveImporting = false;
+
+async function importSelectedFromDrive() {
+  if (__driveImporting) return;
+  __driveImporting = true;
+
   var checks = Array.prototype.slice.call(document.querySelectorAll('.driveChk:checked'));
   if (!checks.length) {
     alert('請先勾選至少一個檔案。');
+    __driveImporting = false;
     return;
   }
 
@@ -804,7 +810,8 @@ function buildDriveOpenUrl(fileId) {
   });
 
   closeDriveModal();
-  alert('已匯入 ' + imported + ' 份排關圖（雲端預覽模式）。');
+  __driveImporting = false;
+  alert('已成功匯入排關圖');
 }
 
 
@@ -1486,90 +1493,66 @@ const t1 = TPL.t1;
     const driveBtn = document.getElementById('driveImportBtn');
     if (driveBtn) driveBtn.addEventListener('click', openDriveModal);
 
-    const closeDriveBtn = document.getElementById('closeDriveBtn');
-    if (closeDriveBtn) closeDriveBtn.addEventListener('click', closeDriveModal);
+// Delegated handlers for Drive modal (bind once; avoid duplicated alerts)
+    let __driveDelegatesBound = false;
+    function bindDriveDelegatesOnce() {
+      if (__driveDelegatesBound) return;
+      __driveDelegatesBound = true;
 
-    const driveModal = document.getElementById('driveModal');
-    if (driveModal) {
-      driveModal.addEventListener('click', (e) => {
+      // 全選（只作用於目前可見清單）
+      document.addEventListener('change', (e) => {
         const t = e.target;
-        if (t && t.dataset && t.dataset.closeDrive === 'true') closeDriveModal();
-      });
-    }
-
-    
-    // Fallback: delegated drive close handling (robust: supports Text node targets; capture phase)
-    document.addEventListener('click', (e) => {
-      const t = e.target;
-      const el = (t && t.nodeType === 1) ? t : (t && t.parentElement ? t.parentElement : null);
-
-    // delegated driveSelectAll change (works even if element is created later)
-    document.addEventListener('change', (e) => {
-      const t = e.target;
-      if (t && t.id === 'driveSelectAll') {
-        setAllVisibleDriveChecks(!!t.checked);
-      }
-    }, true);
-
-    // delegated drive buttons click (robust binding even if elements are after scripts)
-    document.addEventListener('click', (e) => {
-      const t = e.target;
-      const el = (t && t.nodeType === 1) ? t : (t && t.parentElement ? t.parentElement : null);
-      if (!el) return;
-
-      // 匯入已勾選
-      try {
-        if (el.closest && el.closest('#driveImportSelectedBtn')) {
-          importSelectedFromDrive();
-          return;
+        if (t && t.id === 'driveSelectAll') {
+          setAllVisibleDriveChecks(!!t.checked);
         }
-      } catch (err) {}
+      }, true);
 
-      // 重新載入
-      try {
-        if (el.closest && el.closest('#driveRefreshBtn')) {
-          loadDriveList();
-          return;
+      // 搜尋：即時篩選
+      document.addEventListener('input', (e) => {
+        const t = e.target;
+        if (t && t.id === 'driveSearch') {
+          renderDriveList(driveCache);
+          syncDriveSelectAllState();
         }
-      } catch (err) {}
-    }, true);
-      if (!el) return;
+      }, true);
 
-      // Close button (any descendant)
-      try {
-        if (el.closest && el.closest('#closeDriveBtn')) {
+      // 匯入／重新載入／關閉（含點擊遮罩）
+      document.addEventListener('click', (e) => {
+        const t = e.target;
+        const el = (t && t.nodeType === 1) ? t : (t && t.parentElement ? t.parentElement : null);
+        if (!el) return;
+
+        try {
+          if (el.closest && el.closest('#driveImportSelectedBtn')) {
+            importSelectedFromDrive();
+            return;
+          }
+        } catch (err) {}
+
+        try {
+          if (el.closest && el.closest('#driveRefreshBtn')) {
+            loadDriveList();
+            return;
+          }
+        } catch (err) {}
+
+        try {
+          if (el.closest && el.closest('#closeDriveBtn')) {
+            closeDriveModal();
+            return;
+          }
+        } catch (err) {}
+
+        if (el.dataset && el.dataset.closeDrive === 'true') {
           closeDriveModal();
-          return;
         }
-      } catch (err) {}
-
-      // Click on backdrop
-      if (el.dataset && el.dataset.closeDrive === 'true') {
-        closeDriveModal();
-        return;
-      }
-    }, true);
-
-const driveRefreshBtn = document.getElementById('driveRefreshBtn');
-    if (driveRefreshBtn) driveRefreshBtn.addEventListener('click', loadDriveList);
-
-    const driveSearch = document.getElementById('driveSearch');
-    if (driveSearch) driveSearch.addEventListener('input', () => renderDriveList(driveCache));
-
-    const driveSelectAll = document.getElementById('driveSelectAll');
-    if (driveSelectAll) {
-      driveSelectAll.addEventListener('change', (e) => {
-        setAllVisibleDriveChecks(!!e.target.checked);
-      });
+      }, true);
     }
 
-
-    const driveImportSelectedBtn = document.getElementById('driveImportSelectedBtn');
-    if (driveImportSelectedBtn) driveImportSelectedBtn.addEventListener('click', importSelectedFromDrive);
+    bindDriveDelegatesOnce();
 
 
-
-    // PDF import buttons
+// PDF import buttons
     const pdfInputEl = document.getElementById('pdfInput');
     const hookImport = () => { if (pdfInputEl) pdfInputEl.click(); };
 
