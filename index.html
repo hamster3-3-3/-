@@ -22,7 +22,35 @@
 
     /* Handwriting canvas: avoid browser touch gestures while drawing */
     canvas.notesCanvas { touch-action: none; }
-  </style>
+  
+    /* Notes tool button active state */
+    .notesEraserBtn.is-eraser {
+      background: #0f172a; /* slate-900 */
+      color: #ffffff;
+      border-color: #0f172a;
+    }
+    .notesCanvasBox { box-sizing: border-box; }
+
+    /* Notes tool button (pen/eraser) active state */
+    .notesToolBtn.is-active {
+      background: #0f172a; /* slate-900 */
+      color: #ffffff;
+      border-color: #0f172a;
+    }
+
+/* Tablet-friendly resize handle (acts like textarea corner) */
+.notesResizeHandle{
+  position:absolute;
+  right:6px;
+  bottom:6px;
+  width:18px;
+  height:18px;
+  cursor: ns-resize;
+  border-radius:6px;
+  background:
+    linear-gradient(135deg, transparent 0 50%, rgba(148,163,184,.55) 50% 52%, transparent 52% 60%, rgba(148,163,184,.55) 60% 62%, transparent 62% 70%, rgba(148,163,184,.55) 70% 72%, transparent 72% 100%);
+}
+</style>
 
   <script>
     // --- Robust loader for PptxGenJS (fix "download button does nothing" when CDN is blocked) ---
@@ -209,14 +237,36 @@
           <div class="flex items-center justify-between gap-2">
             <span class="text-xs font-semibold text-slate-600">內容記錄</span>
             <div class="flex items-center gap-2">
+              <button type="button" class="notesPenBtn notesToolBtn rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">畫筆</button>
+              <button type="button" class="notesEraserBtn notesToolBtn rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">橡皮擦</button>
               <button type="button" class="notesClearBtn rounded-xl border px-3 py-1.5 text-xs font-semibold hover:bg-slate-50">清除手寫</button>
             </div>
           </div>
-          <div class="mt-1 rounded-xl border bg-white overflow-hidden">
-            <!-- 手寫區（支援觸控筆 / 平板手寫）：請勿移除 touch-action:none -->
-            <canvas class="notesCanvas block w-full" style="height: 320px; touch-action: none;"></canvas>
+
+          <!-- 內容記錄：平板橫向優先（左右雙欄），手機/窄螢幕自動改為上下堆疊 -->
+          <div class="mt-1 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <!-- 左：可打字 -->
+            <div class="min-w-0">
+              <div class="mb-1 text-xs font-semibold text-slate-500">內容記錄（打字）</div>
+              <textarea class="notesTextInput w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
+                style="height: 380px; resize: vertical;"
+                placeholder="可直接打字記錄（例如：現況、觀察重點、原因假設、與廠方確認內容等）"></textarea>
+            </div>
+
+            <!-- 右：可手寫（觸控筆/手指） -->
+            <div class="min-w-0">
+              <div class="mb-1 text-xs font-semibold text-slate-500">內容記錄（手寫）</div>
+              <div class="rounded-xl border bg-white overflow-hidden">
+                <div class="notesCanvasBox w-full rounded-xl border border-slate-200 bg-white overflow-hidden relative" style="height: 380px; min-height: 260px;">
+                  <canvas class="notesCanvas block w-full h-full" style="touch-action: none;"></canvas>
+                  <!-- Custom resize handle (tablet-friendly, avoids conflict with drawing) -->
+                  <div class="notesResizeHandle" title="拖曳調整手寫區高度"></div>
+                </div>
+              </div>
+            </div>
           </div>
-          <p class="mt-1 text-xs text-slate-500">支援觸控筆／手指手寫；建議使用觸控筆以提升精準度。</p>
+
+          <p class="mt-1 text-xs text-slate-500">此區同時支援打字與觸控筆／手指手寫；平板橫向時將自動左右分欄，建議使用觸控筆以提升精準度。</p>
         </label>
 
         <label class="md:col-span-12">
@@ -387,10 +437,69 @@
       _notesCanvasRegistry.add(canvas);
       _ensureNotesResizeHook();
 
+      // Observe element resize (e.g., user drags the resizer on the canvas box)
+      const boxEl = canvas.closest('.notesCanvasBox') || canvas.parentElement;
 
-      const ctx = prepareCanvasContext(canvas);
+      // Custom resize handle (drag to change height) — avoids conflict with drawing on the canvas
+      if (boxEl && !boxEl._notesResizeHandleBound) {
+        const handle = boxEl.querySelector('.notesResizeHandle');
+        if (handle) {
+          let startY = 0;
+          let startH = 0;
+          const onMove = (e) => {
+            const dy = (e.clientY - startY);
+            let next = startH + dy;
+            const minH = 260;
+            const maxH = Math.round(window.innerHeight * 0.8);
+            if (next < minH) next = minH;
+            if (next > maxH) next = maxH;
+            boxEl.style.height = next + 'px';
+          };
+          const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+          };
+          handle.addEventListener('pointerdown', (e) => {
+            e.preventDefault();
+            startY = e.clientY;
+            startH = Math.round(boxEl.getBoundingClientRect().height || 0);
+            try { handle.setPointerCapture(e.pointerId); } catch (err) {}
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+          });
+        }
+        boxEl._notesResizeHandleBound = true;
+      }
+
+      if (boxEl && typeof ResizeObserver !== 'undefined' && !canvas._notesResizeObserver) {
+        let roT = null;
+        const ro = new ResizeObserver(() => {
+          if (canvas._isDrawing) return; // do not resize/repaint while user is drawing (prevents tool glitches)
+          if (roT) clearTimeout(roT);
+          roT = setTimeout(() => {
+            // Preserve current ink (even if user hasn't lifted pen yet)
+            let inkNow = '';
+            try { inkNow = canvas.toDataURL('image/png'); } catch (err) {}
+            const i = Number(canvas.dataset.notesIdx || idx);
+            resizeCanvas(canvas, inkNow || ((state.records[i] && state.records[i].notesInk) ? state.records[i].notesInk : ''));
+            // Save box height so it persists per item
+            try {
+              const h = Math.round((boxEl.getBoundingClientRect().height || 0));
+              if (h > 0 && state.records[i]) state.records[i].notesBoxH = h;
+            } catch (err) {}
+            // Save ink after resize
+            try {
+              if (state.records[i]) state.records[i].notesInk = canvas.toDataURL('image/png');
+            } catch (err) {}
+          }, 120);
+        });
+        ro.observe(boxEl);
+        canvas._notesResizeObserver = ro;
+      }
+const ctx = prepareCanvasContext(canvas);
 
       let drawing = false;
+      canvas._isDrawing = false;
       let lastX = 0;
       let lastY = 0;
       let activePointerId = null;
@@ -406,10 +515,25 @@
 
         e.preventDefault();
         drawing = true;
+        canvas._isDrawing = true;
         activePointerId = e.pointerId;
         try { canvas.setPointerCapture(activePointerId); } catch (err) {}
 
-        // Make sure we are using current DPR transform
+        // Tool mode: pen / eraser
+        // - pen: normal ink
+        // - eraser: removes ink (destination-out) so it works regardless of background color
+        const tool = (state.records[idx] && state.records[idx].notesTool) ? state.records[idx].notesTool : 'pen';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        if (tool === 'eraser') {
+          ctx.globalCompositeOperation = 'destination-out';
+          ctx.lineWidth = 22;
+        } else {
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = '#111111';
+          ctx.lineWidth = 2.2;
+        }
+// Make sure we are using current DPR transform
         const dpr = window.devicePixelRatio || 1;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
@@ -444,6 +568,7 @@
         if (activePointerId !== null && e.pointerId !== activePointerId) return;
 
         drawing = false;
+        canvas._isDrawing = false;
         try { canvas.releasePointerCapture(activePointerId); } catch (err) {}
         activePointerId = null;
 
@@ -1027,7 +1152,7 @@ async function importSelectedFromDrive() {
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     }
 
-    function makeEmptyRecord() { return { type: '', name: '', notesInk: '', desc: '', images: [] }; }
+    function makeEmptyRecord() { return { type: '', name: '', notesText: '', notesInk: '', notesTool: 'pen', desc: '', images: [] }; }
 
     function displayName(rec, idx) {
       const name = rec && typeof rec.name === 'string' ? rec.name : '';
@@ -1166,6 +1291,7 @@ async function importSelectedFromDrive() {
       panelsEl.innerHTML = '';
 
       state.records.forEach((rec, idx) => {
+        // --- Tab button ---
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.dataset.idx = String(idx);
@@ -1174,34 +1300,71 @@ async function importSelectedFromDrive() {
         btn.addEventListener('click', () => setActive(idx));
         tabsEl.appendChild(btn);
 
+        // --- Panel ---
         const node = panelTpl.content.cloneNode(true);
         const panel = node.querySelector('article');
         panel.classList.add('panel');
         panel.dataset.idx = String(idx);
 
-        const typeInput = $('.typeInput', panel);
-        const nameInput = $('.nameInput', panel);
-        const suggestBox = panel.querySelector('.suggestBox');
-        const descInput = $('.descInput', panel);
+        // Record patch helper (define early so below handlers can use it safely)
+        const setRecord = (patch) => Object.assign(state.records[idx], patch);
 
-        const imgInput = $('.imgInput', panel);
-        const imgHint = $('.imgHint', panel);
-        const imgPreview = $('.imgPreview', panel);
+        const typeInput   = $('.typeInput', panel);
+        const nameInput   = $('.nameInput', panel);
+        const suggestBox  = panel.querySelector('.suggestBox');
+        const descInput   = $('.descInput', panel);
 
+        const imgInput    = $('.imgInput', panel);
+        const imgHint     = $('.imgHint', panel);
+        const imgPreview  = $('.imgPreview', panel);
+
+        // Notes: text + handwriting
+        const notesTextInput = $('.notesTextInput', panel);
+        const notesPenBtn    = panel.querySelector('.notesPenBtn');
+        const notesEraserBtn = panel.querySelector('.notesEraserBtn');
+        const notesCanvas    = $('.notesCanvas', panel);
+        const notesClearBtn  = panel.querySelector('.notesClearBtn');
+
+        // Init values
         typeInput.value = rec.type || '';
         nameInput.value = rec.name || '';
         descInput.value = rec.desc || '';
 
-        // 內容記錄（手寫區）
-        const notesCanvas = $('.notesCanvas', panel);
-        const notesClearBtn = panel.querySelector('.notesClearBtn');
+        // ---- Notes helpers (define BEFORE use) ----
+        const getNotesTool = () => (state.records[idx] && state.records[idx].notesTool) ? state.records[idx].notesTool : 'pen';
+        const setNotesTool = (tool) => setRecord({ notesTool: tool });
 
+        const syncNotesToolUI = () => {
+          const tool = getNotesTool();
+          if (notesPenBtn) {
+            notesPenBtn.classList.toggle('is-active', tool === 'pen');
+            notesPenBtn.setAttribute('aria-pressed', tool === 'pen' ? 'true' : 'false');
+          }
+          if (notesEraserBtn) {
+            notesEraserBtn.classList.toggle('is-active', tool === 'eraser');
+            notesEraserBtn.setAttribute('aria-pressed', tool === 'eraser' ? 'true' : 'false');
+          }
+        };
+
+        // Panel title
         updatePanelTitle(panel, idx);
 
-        // 初始化手寫畫布（需在 DOM 佈局後取得寬度）
+        // ---- Notes: typing ----
+        if (notesTextInput) {
+          notesTextInput.value = rec.notesText || '';
+          notesTextInput.addEventListener('input', (e) => setRecord({ notesText: (e.target.value || '') }));
+        }
+
+        // ---- Notes: handwriting ----
         if (notesCanvas) {
+          // Restore per-item canvas box height (if any)
+          const boxEl = notesCanvas.closest('.notesCanvasBox') || notesCanvas.parentElement;
+          const savedH = (state.records[idx] && state.records[idx].notesBoxH) ? Number(state.records[idx].notesBoxH) : 0;
+          if (boxEl && savedH && savedH > 0) boxEl.style.height = savedH + 'px';
+
           initNotesCanvas(notesCanvas, idx);
-          // 載入已儲存的手寫內容
+
+          // Restore saved ink or clear
           if (state.records[idx].notesInk) {
             restoreCanvasFromDataUrl(notesCanvas, state.records[idx].notesInk);
           } else {
@@ -1213,28 +1376,55 @@ async function importSelectedFromDrive() {
           notesClearBtn.addEventListener('click', () => clearNotesCanvas(notesCanvas, { save: true, idx }));
         }
 
+        if (notesPenBtn || notesEraserBtn) {
+          syncNotesToolUI();
+        }
+        if (notesPenBtn) {
+          notesPenBtn.addEventListener('click', () => {
+            if (getNotesTool() === 'pen') return;
+            setNotesTool('pen');
+            syncNotesToolUI();
+          });
+        }
+        if (notesEraserBtn) {
+          notesEraserBtn.addEventListener('click', () => {
+            if (getNotesTool() === 'eraser') return;
+            setNotesTool('eraser');
+            syncNotesToolUI();
+          });
+        }
 
+        // ---- Images preview ----
         if (rec.images && rec.images.length) {
           imgHint.textContent = `已選擇 ${rec.images.length} 張圖片。`;
           renderImagePreview(imgPreview, rec.images);
         }
 
-        const setRecord = (patch) => Object.assign(state.records[idx], patch);
+        // ---- Inputs handlers ----
+        typeInput.addEventListener('change', (e) => setRecord({ type: (e.target.value || '') }));
 
-        typeInput.addEventListener('change', (e) => setRecord({ type: e.target.value || '' }));
+        // Name input: update record + update tab/title + suggestions
+        const applyPickedName = (picked) => {
+          nameInput.value = picked;
+          setRecord({ name: picked });
+          updateTabLabel(idx);
+          updatePanelTitle(panel, idx);
+          hideSuggestBox(suggestBox);
+        };
 
         nameInput.addEventListener('input', (e) => {
-          setRecord({ name: e.target.value || '' });
+          const v = (e.target.value || '');
+          setRecord({ name: v });
+          updateTabLabel(idx);
+          updatePanelTitle(panel, idx);
+
+          const hits = suggestProductNames(v, 8);
+          renderSuggestBox(suggestBox, hits, applyPickedName);
+        });
 
         nameInput.addEventListener('focus', () => {
           const hits = suggestProductNames(nameInput.value || '', 8);
-          renderSuggestBox(suggestBox, hits, (picked) => {
-            nameInput.value = picked;
-            setRecord({ name: picked });
-            updateTabLabel(idx);
-            updatePanelTitle(panel, idx);
-            hideSuggestBox(suggestBox);
-          });
+          renderSuggestBox(suggestBox, hits, applyPickedName);
         });
 
         nameInput.addEventListener('blur', () => {
@@ -1242,23 +1432,9 @@ async function importSelectedFromDrive() {
           setTimeout(() => hideSuggestBox(suggestBox), 150);
         });
 
-          updateTabLabel(idx);
-          updatePanelTitle(panel, idx);
+        descInput.addEventListener('input', (e) => setRecord({ desc: (e.target.value || '') }));
 
-          // Substring suggestions from imported 排關圖
-          const hits = suggestProductNames(e.target.value || '', 8);
-          renderSuggestBox(suggestBox, hits, (picked) => {
-            nameInput.value = picked;
-            setRecord({ name: picked });
-            updateTabLabel(idx);
-            updatePanelTitle(panel, idx);
-            hideSuggestBox(suggestBox);
-          });
-        });
-
-        descInput.addEventListener('input', (e) => setRecord({ desc: e.target.value || '' }));
-
-        // 顯示排關圖
+        // ---- Show PDF ----
         const showPdfBtn = panel.querySelector('.showPdfBtn');
         if (showPdfBtn) {
           showPdfBtn.addEventListener('click', () => {
@@ -1268,7 +1444,7 @@ async function importSelectedFromDrive() {
           });
         }
 
-
+        // ---- Images upload ----
         imgInput.addEventListener('change', async (e) => {
           const files = Array.from((e.target && e.target.files) ? e.target.files : []);
           if (!files.length) return;
@@ -1295,6 +1471,7 @@ async function importSelectedFromDrive() {
           imgPreview.innerHTML = '';
         });
 
+        // ---- Per-panel actions (mobile) ----
         $('.addBtn', panel).addEventListener('click', () => addForm());
         $('.dupBtn', panel).addEventListener('click', () => duplicateAt(idx));
         $('.delBtn', panel).addEventListener('click', () => removeAt(idx));
@@ -1548,7 +1725,14 @@ const t1 = TPL.t1;
         });
       });
 
-      const desc = (rec.desc || '').trim();
+      const notesText = (rec.notesText || '').trim();
+      const descRaw = (rec.desc || '').trim();
+      let desc = '';
+      if (notesText && descRaw) desc = `內容記錄：${notesText}
+
+問題說明：${descRaw}`;
+      else if (notesText) desc = notesText;
+      else desc = descRaw;
       if (desc) {
         // 左側回答框：整塊空白區（無橫線），文字從標籤下方開始
         slide.addText(desc, {
@@ -1612,7 +1796,7 @@ const t1 = TPL.t1;
 
       if (!state.records.length) { alert('目前沒有資料可匯出。'); return; }
 
-      const hasAny = state.records.some(r => (r.type || r.name || r.desc || r.notesInk || (r.images && r.images.length)));
+      const hasAny = state.records.some(r => (r.type || r.name || r.notesText || r.desc || r.notesInk || (r.images && r.images.length)));
       if (!hasAny) { alert('資料皆為空白，請至少填寫一筆內容或上傳圖片。'); return; }
 
       let pptx;
