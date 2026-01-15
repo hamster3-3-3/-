@@ -450,6 +450,8 @@
       </div>
 
       <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-12">
+        <div class="md:col-span-12 rounded-2xl border bg-slate-50 p-4">
+          <div class="grid grid-cols-1 gap-4 md:grid-cols-12">
         <label class="md:col-span-4">
           <span class="text-xs font-semibold text-slate-600">類型</span>
           <select class="typeInput mt-1 w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring">
@@ -477,6 +479,60 @@
             <div class="processLoading mt-1 text-xs text-slate-500 hidden">載入中…</div>
         </label>
 
+<!-- 排關圖 KPI（自動擷取｜不可編輯） -->
+      <div class="md:col-span-12">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <label>
+            <span class="text-xs font-semibold text-slate-600">預計產量(hr)</span>
+            <div class="mt-1 flex items-center gap-2">
+              <input class="kpiExpected w-full rounded-xl border bg-white px-3 py-2 text-sm" disabled />
+              <span class="text-xs text-slate-500">個/hr</span>
+            </div>
+          </label>
+          <label>
+            <span class="text-xs font-semibold text-slate-600">人時生產性</span>
+            <div class="mt-1 flex items-center gap-2">
+              <input class="kpiManhour w-full rounded-xl border bg-white px-3 py-2 text-sm" disabled />
+              <span class="text-xs text-slate-500">個/時</span>
+            </div>
+          </label>
+          <label>
+            <span class="text-xs font-semibold text-slate-600">包裝設備</span>
+            <input class="kpiPackEquip mt-1 w-full rounded-xl border bg-white px-3 py-2 text-sm" disabled />
+          </label>
+          <label>
+            <span class="text-xs font-semibold text-slate-600">包裝機台產能(hr)</span>
+            <div class="mt-1 flex items-center gap-2">
+              <input class="kpiPackCap w-full rounded-xl border bg-white px-3 py-2 text-sm" disabled />
+              <span class="text-xs text-slate-500">個/hr</span>
+            </div>
+          </label>
+        </div>
+      </div>
+          </div>
+        </div>
+
+        
+<!-- 排關圖（內嵌顯示｜取代跳出視窗） -->
+<div class="pdfInlineWrap hidden mt-4 col-span-full md:col-span-12 md:col-start-1 w-full rounded-2xl border bg-white overflow-hidden">
+  <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b bg-slate-50">
+    <div class="text-sm font-semibold text-slate-700">排關圖</div>
+    <div class="flex flex-wrap items-center gap-2">
+      <div class="inline-flex items-center overflow-hidden rounded-lg border bg-white">
+        <button type="button" class="pdfZoomOut px-3 py-1.5 text-sm font-semibold hover:bg-slate-50">－</button>
+        <button type="button" class="pdfFit border-x px-3 py-1.5 text-sm font-semibold hover:bg-slate-50">適合寬度</button>
+        <button type="button" class="pdfZoomIn px-3 py-1.5 text-sm font-semibold hover:bg-slate-50">＋</button>
+      </div>
+      <button type="button" class="pdfAnnoToggle rounded-lg border bg-white px-3 py-1.5 text-sm font-semibold hover:bg-slate-50">標註</button>
+      <button type="button" class="pdfAnnoClear rounded-lg border bg-white px-3 py-1.5 text-sm font-semibold hover:bg-slate-50">清除標註</button>
+      <button type="button" class="closePdfInlineBtn rounded-lg border bg-white px-3 py-1.5 text-sm font-semibold hover:bg-slate-50">收合</button>
+    </div>
+  </div>
+  <div class="pdfInlineRender w-full max-h-[82vh] min-h-[55vh] overflow-auto bg-slate-50"></div>
+</div>
+
+<div class="md:col-span-12">
+
         <!-- 作業工程（從排關圖擷取 -> 轉成可編輯表格） -->
         <div class="md:col-span-12 md:col-start-1 col-span-1 w-full processStepsWrap hidden">
           <div class="flex items-center justify-between gap-2">
@@ -492,9 +548,7 @@
             </div>
           </div>
         </div>
-
-        <label class="md:col-span-12">
-<!-- 內容記錄：平板橫向優先（左右雙欄），手機/窄螢幕自動改為上下堆疊 -->
+      <!-- 內容記錄：平板橫向優先（左右雙欄），手機/窄螢幕自動改為上下堆疊 -->
           <div class="mt-1 grid grid-cols-1 gap-3 md:grid-cols-2">
             <!-- 左：可打字 -->
             <div class="min-w-0">
@@ -525,7 +579,7 @@
           </div>
 
           <p class="mt-1 text-xs text-slate-500">此區同時支援打字與觸控筆／手指手寫；平板橫向時將自動左右分欄，建議使用觸控筆以提升精準度。</p>
-        </label>
+        </div>
 
         <label class="md:col-span-12">
           <span class="text-xs font-semibold text-slate-600">問題說明</span>
@@ -1026,32 +1080,160 @@ const ctx = prepareCanvasContext(canvas);
       return base.replace(/^\s*\d+\s*[\.\-、_ ]\s*/,'').trim() || base.trim();
     }
 
-    async function extractProductNameFromPdf(arrayBuffer) {
-      const ok = await ensurePdfJsLoaded();
-      if (!ok || !window.pdfjsLib) return '';
+    
 
-      try {
-        const doc = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        const page = await doc.getPage(1);
-        const tc = await page.getTextContent();
-        const text = tc.items.map(it => (it && it.str) ? it.str : '').join(' ');
-        // 常見格式： "商品名稱 義式番茄起司義大利麵"
-        let m = text.match(/商品名稱\s*([^\s].*?)(?:\s{2,}|生產列數|半成品設備|包裝設備|作成日|產線時間|$)/);
-        if (m && m[1]) return m[1].trim();
+// ------------------------------
+// PDF text helpers (for product name extraction)
+// ------------------------------
+function __normPdfStr_(s){
+  return String(s || "")
+    .replace(/\s+/g, "")
+    .replace(/（/g, "(").replace(/）/g, ")")
+    .replace(/：/g, ":")
+    .trim();
+}
 
-        const idx = text.indexOf('商品名稱');
-        if (idx >= 0) {
-          const tail = text.slice(idx + 4, idx + 60);
-          return tail.trim();
-        }
-        return '';
-      } catch (e) {
-        console.warn('extractProductNameFromPdf failed', e);
-        return '';
-      }
+/**
+ * Group PDF.js text items into lines based on Y coordinate.
+ * items: [{str,x,y}]
+ * return: [{y, tokens:[...], text, norm}]
+ */
+function groupTextItemsByLine_(items, yTol){
+  const Y_TOL = (typeof yTol === "number") ? yTol : 2.6;
+  const arr = Array.isArray(items) ? items.slice() : [];
+  arr.sort((a,b)=> (b.y - a.y) || (a.x - b.x));
+
+  const lines = [];
+  for (const it of arr){
+    let line = null;
+    for (const l of lines){
+      if (Math.abs(l.y - it.y) <= Y_TOL){ line = l; break; }
     }
+    if (!line){
+      line = { y: it.y, tokens: [] };
+      lines.push(line);
+    }
+    line.tokens.push(it);
+  }
+  for (const l of lines){
+    l.tokens.sort((a,b)=> a.x - b.x);
+    l.text = l.tokens.map(t=>String(t.str||"").trim()).join("");
+    l.norm = __normPdfStr_(l.text);
+  }
+  lines.sort((a,b)=> b.y - a.y);
+  return lines;
+}
 
-    function pdfListText() {
+/**
+ * Pick value to the right of a label from grouped lines.
+ * labels: array of label strings, e.g. ['商品名稱']
+ * mode: 'text' (default) - returns concatenated string after label
+ */
+function pickValueRightOfLabel_(lines, labels, mode){
+  const lbs = (labels || []).map(__normPdfStr_).filter(Boolean);
+  if (!lbs.length) return "";
+
+  const stopHeaders = new Set([
+    __normPdfStr_("生產列數"),
+    __normPdfStr_("作成日"),
+    __normPdfStr_("產線配置圖"),
+    __normPdfStr_("主食"),
+  ]);
+
+  for (let idx=0; idx<(lines||[]).length; idx++){
+    const line = lines[idx];
+    const toks = (line && line.tokens) ? line.tokens : [];
+    if (!toks.length) continue;
+
+    // build per-token normalized string
+    const tNorm = toks.map(t=>__normPdfStr_(t.str));
+    const joined = tNorm.join("");
+
+    for (const lb of lbs){
+      if (!joined.includes(lb)) continue;
+
+      // find label span [i..j] across tokens
+      let found = null;
+      for (let i=0; i<tNorm.length; i++){
+        let acc = "";
+        for (let j=i; j<Math.min(i+10, tNorm.length); j++){
+          acc += tNorm[j];
+          if (acc === lb || acc.includes(lb)){
+            // ensure lb starts within acc; accept
+            found = { i, j };
+            break;
+          }
+        }
+        if (found) break;
+      }
+      if (!found) continue;
+
+      // collect tokens after label
+      const out = [];
+      for (let k=found.j+1; k<toks.length; k++){
+        const raw = String(toks[k].str || "").trim();
+        const n = __normPdfStr_(raw);
+        if (!raw) continue;
+        if (raw === ":" || raw === "：" || raw === "-" ) continue;
+        if (stopHeaders.has(n)) break;
+        // if we hit another known label, stop
+        if (n.includes(__normPdfStr_("生產列數"))) break;
+        out.push(raw);
+      }
+
+      let val = out.join("").trim();
+      if (!val){
+        // fallback: sometimes value is on next line, take first non-empty token
+        const next = lines[idx+1];
+        if (next && next.tokens && next.tokens.length){
+          for (const tk of next.tokens){
+            const raw = String(tk.str || "").trim();
+            if (raw){ val = raw; break; }
+          }
+        }
+      }
+
+      if (mode === "text" || !mode) return val;
+      return val;
+    }
+  }
+  return "";
+}
+
+async function extractProductNameFromPdf(arrayBuffer) {
+  const ok = await ensurePdfJsLoaded();
+  if (!ok || !window.pdfjsLib) return '';
+
+  try {
+    const loadingTask = window.pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdf = await loadingTask.promise;
+    const page = await pdf.getPage(1);
+    const tc = await page.getTextContent();
+    const items = (tc.items || []).map(it => ({
+      str: (it.str || '').toString(),
+      x: (it.transform && it.transform[4]) ? Number(it.transform[4]) : 0,
+      y: (it.transform && it.transform[5]) ? Number(it.transform[5]) : 0
+    })).filter(it => it.str && it.str.trim());
+
+    const lines = groupTextItemsByLine_(items);
+    let name = pickValueRightOfLabel_(lines, ['商品名稱'], 'text') || '';
+    name = String(name || '').trim();
+
+    // avoid accidentally attaching other header fields
+    name = name.replace(/生產列數.*$/,'').trim();
+
+    // Some PDFs may include trailing digits or symbols; keep readable Chinese/English/numbers
+    name = name.replace(/\s+/g,' ').trim();
+
+    return name;
+  } catch (e) {
+    console.warn('extractProductNameFromPdf failed', e);
+    return '';
+  }
+}
+
+
+function pdfListText() {
       const names = Array.from(pdfStore.values()).map(v => v.displayName).filter(Boolean);
       return names.length ? names.join('、') : '（無）';
     }
@@ -1083,6 +1265,7 @@ const ctx = prepareCanvasContext(canvas);
 
       alert(`已匯入排關圖：${imported} 份`);
       try { refreshAllProcessStrips(); } catch (e) {}
+    try { refreshAllKpiPanels(); } catch (e) {}
     }
 
     function findPdfForProductName(productName) {
@@ -1117,15 +1300,17 @@ async function downloadDrivePdfArrayBufferChunked_(fileId, sizeBytes) {
   const baseUrl = DRIVE_EXEC_URL;
   if (!baseUrl) throw new Error('DRIVE_EXEC_URL 未設定');
 
-  // 每段 bytes（請保持為 3 的倍數，避免 base64 拼接出錯）
+  // 每段 bytes（保持為 3 的倍數，避免某些環境 base64 拼接/解碼出現邊界問題）
   const BYTES_PER_CHUNK = 120000; // 120,000 bytes：base64 約 160KB，較不易觸發 JSONP script load error
   let offset = 0;
   let parts = [];
   let loops = 0;
 
+  const totalBytes = Number(sizeBytes || 0);
+
   while (true) {
     loops += 1;
-    if (loops > 5000) throw new Error('chunk too many');
+    if (loops > 20000) throw new Error('chunk too many');
 
     const url = baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?')
       + 'action=downloadChunk'
@@ -1133,23 +1318,25 @@ async function downloadDrivePdfArrayBufferChunked_(fileId, sizeBytes) {
       + '&offset=' + encodeURIComponent(offset)
       + '&limit=' + encodeURIComponent(BYTES_PER_CHUNK);
 
-    const res = await jsonpRequest(url, 30000);
+    const res = await jsonpRequest(url, 45000);
     if (!res || !res.ok) throw new Error((res && res.message) ? res.message : 'downloadChunk failed');
 
-    const chunkB64 = stripDataUrlPrefix(res.base64Chunk || res.chunk || res.data || '');
+    // Apps Script 回傳：chunkBase64 / chunkBytes / offset / done
+    const chunkB64 = stripDataUrlPrefix(res.chunkBase64 || res.base64Chunk || res.chunk || res.data || '');
     if (chunkB64) parts.push(chunkB64);
 
     const done = !!(res.done || res.isLast);
-    const nextOffset = (res.nextOffset !== undefined && res.nextOffset !== null) ? Number(res.nextOffset) : null;
+    const chunkBytes = Number(res.chunkBytes || 0);
 
-    if (done || nextOffset === null || Number.isNaN(nextOffset)) break;
-    offset = nextOffset;
+    // 推進 offset：優先用 offset + chunkBytes；若拿不到就用 limit
+    if (chunkBytes > 0) {
+      offset = Number(res.offset || offset) + chunkBytes;
+    } else {
+      offset = offset + BYTES_PER_CHUNK;
+    }
 
-    // 若後端沒回 nextOffset，就用 limit 推進
-    if (!offset) offset = offset + BYTES_PER_CHUNK;
-
-    // 避免極端情況無限迴圈
-    if (sizeBytes && offset >= Number(sizeBytes)) break;
+    if (done) break;
+    if (totalBytes && offset >= totalBytes) break; // 保險：避免後端未正確回 done
   }
 
   const b64 = parts.join('');
@@ -1215,90 +1402,239 @@ async function getPdfArrayBuffer(pdfItem) {
   // Local 匯入：匯入時已存入 pdfItem.ab
   return pdfItem.ab || null;
 }
-
-function stripDataUrlPrefix(b64) {
-  const s = (b64 || '').toString();
-  if (s.includes('base64,')) return s.split('base64,').pop();
-  if (s.includes(',')) {
-    // Some payloads may be "data:...,..."
-    const tail = s.split(',').pop();
-    // If tail is too short, just return original
-    return tail && tail.length > 50 ? tail : s;
-  }
-  return s;
+/* =========================
+   KPI 四欄位：從排關圖 PDF 文字擷取（與作業工程同一套座標法）
+   - 使用 PDF.js + viewport.convertToViewportPoint（與作業工程一致）
+   - 以「標籤」右側同列 token 抓值（可處理 1,636 被拆成 1 + ,636）
+   - 結果快取在 pdfItem._kpis
+========================= */
+function __cleanNumberLike_(s){
+  if (s == null) return "";
+  return String(s).replace(/[,\s]/g, "").trim();
 }
+function __pickPdfItemByName_(productName){
+  const name = String(productName || "").trim();
+  if (!name || pdfStore.size === 0) return null;
 
-function isProbablyNumber(s) {
-  const t = String(s || '').trim();
-  return /^-?\d+(?:\.\d+)?$/.test(t);
-}
+  const key = normalizeProductKey(name);
+  if (key && pdfStore.has(key)) return pdfStore.get(key);
 
-function normalizeProcessText(s) {
-  return String(s || '')
-    .replace(/\s+/g, '')
-    .replace(/[（）()]/g, (m) => m) // keep parentheses
-    .trim();
-}
+  // 若只有一份排關圖，直接用它（避免名稱不一致造成抓不到）
+  if (pdfStore.size === 1) return Array.from(pdfStore.values())[0];
 
-function clusterBy(items, keyFn, threshold) {
-  const out = [];
-  const sorted = items.slice().sort((a, b) => keyFn(a) - keyFn(b));
-  for (const it of sorted) {
-    const k = keyFn(it);
-    if (!out.length) out.push({ mean: k, items: [it] });
-    else {
-      const last = out[out.length - 1];
-      if (Math.abs(k - last.mean) <= threshold) {
-        last.items.push(it);
-        last.mean = last.items.reduce((s, x) => s + keyFn(x), 0) / last.items.length;
-      } else {
-        out.push({ mean: k, items: [it] });
-      }
+  // 模糊比對：包含關係優先，其次用共同字元長度
+  const normName = key || normalizeProductKey(name);
+  let best = null;
+  let bestScore = -1;
+
+  for (const [k, item] of pdfStore.entries()){
+    if (!k) continue;
+    let score = 0;
+
+    if (k === normName) score += 1000;
+    if (k.includes(normName) || normName.includes(k)) score += 500;
+
+    // common chars
+    let common = 0;
+    const setB = new Set(String(k).split(""));
+    for (const ch of String(normName)){
+      if (setB.has(ch)) common++;
+    }
+    score += common;
+
+    if (item && item.fileName && String(item.fileName).includes(name)) score += 50;
+
+    if (score > bestScore){
+      bestScore = score;
+      best = item;
     }
   }
+  return best;
+}
+
+async function __extractKpisFromPdfItem_(pdfItem) {
+  const empty = { expected: "", manhour: "", packEquip: "", packCap: "", _ver: 3 };
+
+  if (!pdfItem) return empty;
+  if (pdfItem._kpis && pdfItem._kpis._ver === 3) return pdfItem._kpis;
+
+  const ok = await ensurePdfJsLoaded();
+  if (!ok || !window.pdfjsLib) {
+    pdfItem._kpis = empty;
+    return empty;
+  }
+
+  const pdfData = await getPdfArrayBuffer(pdfItem);
+  if (!pdfData) {
+    pdfItem._kpis = empty;
+    return empty;
+  }
+
+  // 參考作業工程：遇到 worker 限制時 fallback
+  let doc;
+  try {
+    doc = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
+  } catch (err) {
+    try {
+      window.pdfjsLib.disableWorker = true;
+      doc = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
+    } catch (err2) {
+      pdfItem._kpis = empty;
+      return empty;
+    }
+  }
+
+  const __norm = (s) => String(s || "")
+    .replace(/\s+/g, "")
+    .replace(/（/g, "(").replace(/）/g, ")")
+    .replace(/：/g, ":")
+    .trim();
+
+  const LABELS = {
+    expected: [/預計產量\s*\(?1\s*小時\)?/i, /預計產量\(1小時\)/i],
+    manhour:  [/人時生產性/i],
+    packEquip:[/包裝設備/i],
+    packCap:  [/包裝機台產能\s*\(?hr\)?/i, /包裝機台產能\(hr\)/i]
+  };
+
+  const isNumberToken = (s) => /[0-9]/.test(__norm(s));
+  const isNumberPiece = (s) => /^[0-9,.\-]+$/.test(__norm(s));
+
+  const fmtNumberLike = (raw) => {
+    const s = String(raw || "").trim();
+    if (!s) return "";
+    const cleaned = s.replace(/,/g, "").replace(/[^\d.\-]/g, "");
+    const n = Number(cleaned);
+    if (!Number.isFinite(n)) return s;
+    const dec = (cleaned.split(".")[1] || "").length;
+    return n.toLocaleString(undefined, { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  };
+
+  // 取前 3 頁（部分 PDF 第一頁可能是封面）
+  const scanPages = Math.min(3, doc.numPages);
+  let bestItems = [];
+  for (let p = 1; p <= scanPages; p++) {
+    const page = await doc.getPage(p);
+    const viewport = page.getViewport({ scale: 2.0 });
+    const tc = await page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false });
+    const raw = (tc && tc.items) ? tc.items : [];
+    const items = [];
+    for (const it of raw) {
+      const str = (it && it.str != null) ? String(it.str).trim() : "";
+      if (!str) continue;
+      const t = it.transform || [];
+      const e = t[4], f = t[5];
+      const pt = viewport.convertToViewportPoint(e, f);
+      items.push({ str, norm: __norm(str), lx: pt[0], ly: pt[1] });
+    }
+
+    // 若該頁含 KPI 標籤，優先使用
+    const all = items.map(o => o.norm).join("");
+    const hit = (all.includes("預計產量") || all.includes("人時生產性") || all.includes("包裝設備") || all.includes("包裝機台產能"));
+    if (hit) { bestItems = items; break; }
+    if (p === scanPages) bestItems = items;
+  }
+
+  if (!bestItems.length) {
+    pdfItem._kpis = empty;
+    return empty;
+  }
+
+  // 找「標籤 token」
+  const findLabel = (patterns) => {
+    const labs = bestItems.filter(it => patterns.some(re => re.test(it.str) || re.test(it.norm)));
+    if (!labs.length) return null;
+    // KPI 區通常在中下方，取較靠下者（ly 大）
+    labs.sort((a,b) => b.ly - a.ly);
+    return labs[0];
+  };
+
+  const allLabelTokens = [];
+  for (const k of Object.keys(LABELS)) {
+    const t = findLabel(LABELS[k]);
+    if (t) allLabelTokens.push(t);
+  }
+
+  const pickRightTokensSameLine = (lab) => {
+    const Y_TOL = 14; // 與作業工程相近
+    // 找到同列右側 tokens
+    const sameLine = bestItems
+      .filter(it => Math.abs(it.ly - lab.ly) <= Y_TOL)
+      .filter(it => it.lx > lab.lx + 6)
+      .slice()
+      .sort((a,b) => a.lx - b.lx);
+
+    if (!sameLine.length) return [];
+
+    // 避免吃到右側另一個標籤（同列）
+    const nextLabelX = allLabelTokens
+      .filter(t => t !== lab && Math.abs(t.ly - lab.ly) <= Y_TOL && t.lx > lab.lx + 6)
+      .map(t => t.lx)
+      .sort((a,b) => a - b)[0];
+
+    return sameLine.filter(it => (nextLabelX == null ? true : it.lx < nextLabelX - 4));
+  };
+
+  const readNumberAfter = (lab) => {
+    const toks = pickRightTokensSameLine(lab);
+    if (!toks.length) return "";
+    // 取第一個含數字的 token，並把後續的數字片段接起來
+    let idx = toks.findIndex(t => isNumberToken(t.norm));
+    if (idx < 0) return "";
+    let s = toks[idx].str;
+    for (let i = idx + 1; i < toks.length; i++) {
+      const prev = toks[i-1];
+      const cur = toks[i];
+      if (!isNumberPiece(cur.norm)) break;
+      if (Math.abs(cur.lx - prev.lx) > 28) break;
+      s += cur.str;
+    }
+    return fmtNumberLike(s);
+  };
+
+  const readEquipAfter = (lab) => {
+    const toks = pickRightTokensSameLine(lab);
+    if (!toks.length) return "";
+    const stop = new Set(["hr","h","個","人","時","秒","s","ct","c/t","%","：",":","-"]);
+    for (const tk of toks) {
+      const raw = String(tk.str || "").trim();
+      if (!raw) continue;
+      const n = __norm(raw).toLowerCase();
+      if (!n) continue;
+      if (stop.has(n)) continue;
+      // 避免誤抓到其他標題
+      if (n.includes("目標") || n.includes("產線") || n.includes("效率")) continue;
+      // 避免抓到另一個標籤文字（保險）
+      if (LABELS.expected.some(re => re.test(raw) || re.test(n))) continue;
+      if (LABELS.manhour.some(re => re.test(raw) || re.test(n))) continue;
+      if (LABELS.packEquip.some(re => re.test(raw) || re.test(n))) continue;
+      if (LABELS.packCap.some(re => re.test(raw) || re.test(n))) continue;
+      return raw;
+    }
+    return "";
+  };
+
+  const labExpected = findLabel(LABELS.expected);
+  const labManhour  = findLabel(LABELS.manhour);
+  const labPackEquip= findLabel(LABELS.packEquip);
+  const labPackCap  = findLabel(LABELS.packCap);
+
+  const expected = labExpected ? readNumberAfter(labExpected) : "";
+  const manhour  = labManhour  ? readNumberAfter(labManhour)  : "";
+  const packEquip= labPackEquip? readEquipAfter(labPackEquip) : "";
+  const packCap  = labPackCap  ? readNumberAfter(labPackCap)  : "";
+
+  const out = { expected, manhour, packEquip, packCap, _ver: 3 };
+  pdfItem._kpis = out;
   return out;
 }
 
-async function renderCropPreviewDataUrl(page, viewport, cropBox) {
-  const canvas = document.createElement('canvas');
-  canvas.width  = Math.ceil(viewport.width);
-  canvas.height = Math.ceil(viewport.height);
-  const ctx = canvas.getContext('2d');
-  await page.render({ canvasContext: ctx, viewport }).promise;
-
-  const x = Math.max(0, Math.floor(viewport.width  * cropBox.x));
-  const y = Math.max(0, Math.floor(viewport.height * cropBox.y));
-  const w = Math.max(1, Math.floor(viewport.width  * cropBox.w));
-  const h = Math.max(1, Math.floor(viewport.height * cropBox.h));
-
-  const crop = document.createElement('canvas');
-  crop.width = w;
-  crop.height = h;
-  const cctx = crop.getContext('2d');
-  cctx.fillStyle = '#ffffff';
-  cctx.fillRect(0, 0, w, h);
-  cctx.drawImage(canvas, x, y, w, h, 0, 0, w, h);
-
-  return crop.toDataURL('image/png');
+// 供 UI 呼叫：以商品名取得 KPI（refreshKpis 會呼叫）
+async function getKpisByProductName(productName){
+  const item = __pickPdfItemByName_(productName);
+  const k = await __extractKpisFromPdfItem_(item);
+  return k;
 }
-
-function estimateCropFromAnchor(textItems, viewport) {
-  // 嘗試找到「作業工程」文字作為右側錨點（不同版型可能略有差異）
-  const cand = textItems.find(it => String(it.str || '').includes('作業工程')) ||
-               textItems.find(it => String(it.str || '').includes('作業') && String(it.str || '').includes('工程'));
-  if (!cand) return null;
-
-  // cand.x / cand.y 已是 viewport 座標（top-left origin）
-  const anchorX = cand.x || 0;
-
-  // 以錨點推估：從頁面左側 3% 到右側 97%，高度 5%~95%
-  // 若錨點非常靠右，仍能覆蓋整段作業工程表格
-  const x0 = Math.max(0.02, Math.min(0.06, (anchorX / viewport.width) - 0.90));
-  return { x: x0, y: 0.05, w: 0.95 - x0, h: 0.90 };
-}
-
-
-
 async function extractProcessTableDataFromPdf(arrayBuffer) {
   const ok = await ensurePdfJsLoaded();
   if (!ok || !window.pdfjsLib) return { ok: false, message: 'PDF.js 尚未載入' };
@@ -2044,6 +2380,13 @@ function buildDriveOpenUrl(fileId) {
       return out;
     }
 
+    function stripDataUrlPrefix(s) {
+      // Accepts "data:application/pdf;base64,...." or plain base64; returns plain base64
+      const str = (s || '').trim();
+      const idx = str.indexOf('base64,');
+      return idx >= 0 ? str.slice(idx + 7).trim() : str;
+    }
+
     let __driveImporting = false;
 
 function setDriveProgress_(show, done, total, filename) {
@@ -2359,6 +2702,68 @@ const processPreviewWrap = panel.querySelector('.processStepsPreviewWrap');
         const processPreviewImg  = panel.querySelector('.processStepsPreviewImg');
         const processRefreshBtn  = panel.querySelector('.processRefreshBtn');
 
+        // KPI fields (from 排關圖 PDF)
+        const kpiExpected  = panel.querySelector('.kpiExpected');
+        const kpiManhour   = panel.querySelector('.kpiManhour');
+        const kpiPackEquip = panel.querySelector('.kpiPackEquip');
+        const kpiPackCap   = panel.querySelector('.kpiPackCap');
+
+
+        const __kpiDash = '—';
+        const setKpiValue = (el, v) => { if (!el) return; el.value = (v && String(v).trim()) ? String(v).trim() : __kpiDash; };
+        const setAllKpis = (res, loading) => {
+          if (!res || !res.ok) {
+            if (loading) {
+              setKpiValue(kpiExpected, __kpiDash);
+              setKpiValue(kpiManhour, __kpiDash);
+              setKpiValue(kpiPackEquip, __kpiDash);
+              setKpiValue(kpiPackCap, __kpiDash);
+              return;
+            }
+            setKpiValue(kpiExpected, __kpiDash);
+            setKpiValue(kpiManhour, __kpiDash);
+            setKpiValue(kpiPackEquip, __kpiDash);
+            setKpiValue(kpiPackCap, __kpiDash);
+            return;
+          }
+          setKpiValue(kpiExpected, res.expected);
+          setKpiValue(kpiManhour, res.manhour);
+          setKpiValue(kpiPackEquip, res.packEquip);
+          setKpiValue(kpiPackCap, res.packCap);
+        };
+
+        let __kpiTimer = null;
+        let __kpiSeq = 0;
+
+        async function refreshKpis(force) {
+          if (!kpiExpected && !kpiManhour && !kpiPackEquip && !kpiPackCap) return;
+
+          const nameNow = String((state.records[idx] && (state.records[idx].productName || state.records[idx].name)) || '').trim();
+          if (!nameNow) { setAllKpis(null, false); return; }
+
+          const mySeq = ++__kpiSeq;
+          setAllKpis(null, true);
+
+          try {
+            const res = await getKpiForProduct(nameNow, { force: !!force });
+            if (mySeq !== __kpiSeq) return; // stale
+            setAllKpis(res, false);
+          } catch (e) {
+            if (mySeq !== __kpiSeq) return;
+            setAllKpis(null, false);
+          }
+        }
+
+        function scheduleKpiRefresh() {
+          clearTimeout(__kpiTimer);
+          __kpiTimer = setTimeout(() => refreshKpis(false), 350);
+        }
+
+        // Expose for global refresh after 匯入排關圖 / 雲端匯入
+        panel.__refreshKpis = (force) => refreshKpis(!!force);
+
+
+
         const imgInput    = $('.imgInput', panel);
         const imgHint     = $('.imgHint', panel);
         const imgPreview  = $('.imgPreview', panel);
@@ -2404,6 +2809,7 @@ const processPreviewWrap = panel.querySelector('.processStepsPreviewWrap');
 
         // Panel title
         updatePanelTitle(panel, idx);
+          scheduleKpiRefresh();
 
         // ---- Notes: typing ----
         if (notesTextInput) {
@@ -2471,6 +2877,11 @@ const processPreviewWrap = panel.querySelector('.processStepsPreviewWrap');
           setRecord({ name: picked, productName: picked });
           updateTabLabel(idx);
           updatePanelTitle(panel, idx);
+          // KPI auto-refresh (debounced)
+          if (panel.__kpiTimer) clearTimeout(panel.__kpiTimer);
+          panel.__kpiTimer = setTimeout(() => {
+            try { if (panel.__refreshKpis) panel.__refreshKpis(); } catch (_) {}
+          }, 200);
           hideSuggestBox(suggestBox);
           
         };
@@ -2909,6 +3320,9 @@ const scheduleProcessSteps = () => {
 // Expose for global refresh after 匯入排關圖
 panel.__refreshProcessStrip = () => refreshProcessSteps(true);
 
+        // Init KPI display
+        refreshKpis(false);
+
 // Initial render disabled (manual trigger only)
 if (processRefreshBtn) {
   processRefreshBtn.addEventListener('click', () => refreshProcessSteps(true));
@@ -2920,6 +3334,12 @@ if (processRefreshBtn) {
           setRecord({ name: v, productName: v });
           updateTabLabel(idx);
           updatePanelTitle(panel, idx);
+
+          // KPI auto-refresh (debounced)
+          if (panel.__kpiTimer) clearTimeout(panel.__kpiTimer);
+          panel.__kpiTimer = setTimeout(() => {
+            try { if (panel.__refreshKpis) panel.__refreshKpis(); } catch (_) {}
+          }, 350);
 
           const hits = suggestProductNames(v, 8);
           renderSuggestBox(suggestBox, hits, applyPickedName);
@@ -2938,9 +3358,148 @@ if (processRefreshBtn) {
 
         descInput.addEventListener('input', (e) => setRecord({ desc: (e.target.value || '') }));
 
-        // ---- Show PDF ----
-        
-        // ---- Process Steps (manual) ----
+        // ---- Show PDF (inline) ----
+const showPdfBtn = panel.querySelector('.showPdfBtn');
+const pdfInlineWrap = panel.querySelector('.pdfInlineWrap');
+const pdfInlineRender = panel.querySelector('.pdfInlineRender');
+const closePdfInlineBtn = panel.querySelector('.closePdfInlineBtn');
+const pdfZoomInBtn = panel.querySelector('.pdfZoomIn');
+const pdfZoomOutBtn = panel.querySelector('.pdfZoomOut');
+const pdfFitBtn = panel.querySelector('.pdfFit');
+const pdfAnnoToggleBtn = panel.querySelector('.pdfAnnoToggle');
+const pdfAnnoClearBtn = panel.querySelector('.pdfAnnoClear');
+
+function ensurePdfPrefs_() {
+  const rec = state.records[idx];
+  if (!rec) return;
+  if (typeof rec.pdfZoomFactor !== 'number' || !Number.isFinite(rec.pdfZoomFactor)) rec.pdfZoomFactor = 1.25; // iPad 友善：預設稍微放大
+  if (typeof rec.pdfAnnoMode !== 'boolean') rec.pdfAnnoMode = false;
+  if (!rec.pdfAnnoStore || typeof rec.pdfAnnoStore !== 'object') rec.pdfAnnoStore = {};
+}
+
+function updatePdfInlineControls_() {
+  if (!pdfAnnoToggleBtn) return;
+  ensurePdfPrefs_();
+  const rec = state.records[idx];
+
+  if (rec.pdfAnnoMode) {
+    pdfAnnoToggleBtn.classList.add('bg-slate-900', 'text-white');
+    pdfAnnoToggleBtn.classList.remove('hover:bg-slate-50');
+    pdfAnnoToggleBtn.textContent = '標註中';
+  } else {
+    pdfAnnoToggleBtn.classList.remove('bg-slate-900', 'text-white');
+    pdfAnnoToggleBtn.classList.add('hover:bg-slate-50');
+    pdfAnnoToggleBtn.textContent = '標註';
+  }
+}
+
+function showInlinePdf(show) {
+  if (!pdfInlineWrap) return;
+  pdfInlineWrap.classList.toggle('hidden', !show);
+  if (show) {
+    // slightly delayed to ensure layout is ready
+    setTimeout(() => {
+      try { pdfInlineWrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {}
+    }, 50);
+  }
+}
+
+async function refreshInlinePdfPreview() {
+  if (!pdfInlineRender) return;
+
+  const productName = (state.records[idx].name || '').trim();
+  const pdfItem = findPdfForProductName(productName);
+
+  if (!pdfItem) {
+    alert('目前沒有可用的排關圖資料。\n\n請先匯入排關圖（離線或雲端）再顯示排關圖。');
+    return;
+  }
+
+  try {
+    ensurePdfPrefs_();
+    await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+    await ensurePdfJsLoaded();
+    const ab = await getPdfArrayBuffer(pdfItem);
+    if (!ab) throw new Error('No PDF buffer');
+
+    await renderPdfInto(pdfInlineRender, ab, {
+      zoomFactor: state.records[idx].pdfZoomFactor,
+      annotate: state.records[idx].pdfAnnoMode,
+      annoStore: state.records[idx].pdfAnnoStore
+    });
+
+    updatePdfInlineControls_();
+  } catch (err) {
+    console.error('Inline PDF preview failed:', err);
+    alert('排關圖顯示失敗：' + (err && err.message ? err.message : String(err)));
+  }
+}
+
+if (showPdfBtn) {
+  showPdfBtn.addEventListener('click', async () => {
+    const isHidden = pdfInlineWrap ? pdfInlineWrap.classList.contains('hidden') : true;
+    if (isHidden) {
+      showInlinePdf(true);
+      await refreshInlinePdfPreview();
+    } else {
+      showInlinePdf(false);
+    }
+  });
+}
+
+if (closePdfInlineBtn) {
+  closePdfInlineBtn.addEventListener('click', () => showInlinePdf(false));
+}
+
+if (pdfZoomInBtn) {
+  pdfZoomInBtn.addEventListener('click', async () => {
+    ensurePdfPrefs_();
+    const rec = state.records[idx];
+    rec.pdfZoomFactor = Math.min(3.5, rec.pdfZoomFactor + 0.15);
+    if (pdfInlineWrap && !pdfInlineWrap.classList.contains('hidden')) await refreshInlinePdfPreview();
+  });
+}
+
+if (pdfZoomOutBtn) {
+  pdfZoomOutBtn.addEventListener('click', async () => {
+    ensurePdfPrefs_();
+    const rec = state.records[idx];
+    rec.pdfZoomFactor = Math.max(0.6, rec.pdfZoomFactor - 0.15);
+    if (pdfInlineWrap && !pdfInlineWrap.classList.contains('hidden')) await refreshInlinePdfPreview();
+  });
+}
+
+if (pdfFitBtn) {
+  pdfFitBtn.addEventListener('click', async () => {
+    ensurePdfPrefs_();
+    const rec = state.records[idx];
+    rec.pdfZoomFactor = 1.0;
+    if (pdfInlineWrap && !pdfInlineWrap.classList.contains('hidden')) await refreshInlinePdfPreview();
+  });
+}
+
+if (pdfAnnoToggleBtn) {
+  pdfAnnoToggleBtn.addEventListener('click', async () => {
+    ensurePdfPrefs_();
+    const rec = state.records[idx];
+    rec.pdfAnnoMode = !rec.pdfAnnoMode;
+    updatePdfInlineControls_();
+    if (pdfInlineWrap && !pdfInlineWrap.classList.contains('hidden')) await refreshInlinePdfPreview();
+  });
+}
+
+if (pdfAnnoClearBtn) {
+  pdfAnnoClearBtn.addEventListener('click', async () => {
+    ensurePdfPrefs_();
+    const rec = state.records[idx];
+    rec.pdfAnnoStore = {};
+    if (pdfInlineWrap && !pdfInlineWrap.classList.contains('hidden')) await refreshInlinePdfPreview();
+  });
+}
+
+updatePdfInlineControls_();
+
+// ---- Process Steps (manual) ----
         const processBtn = panel.querySelector('.processBtn');
         if (processBtn) {
           processBtn.addEventListener('click', async () => {
@@ -2949,15 +3508,7 @@ if (processRefreshBtn) {
           });
         }
 
-const showPdfBtn = panel.querySelector('.showPdfBtn');
-        if (showPdfBtn) {
-          showPdfBtn.addEventListener('click', () => {
-            const productName = (state.records[idx].name || '').trim();
-            const pdfItem = findPdfForProductName(productName);
-            openPdfModal(productName || displayName(state.records[idx], idx), pdfItem);
-          });
-
-        // ---- 作業工程：手動擷取（不自動） ----
+// ---- 作業工程：手動擷取（不自動） ----
         const processExtractBtn = panel.querySelector('.processExtractBtn');
         if (processExtractBtn) {
           processExtractBtn.addEventListener('click', async () => {
@@ -2966,7 +3517,6 @@ const showPdfBtn = panel.querySelector('.showPdfBtn');
           });
         }
 
-        }
 
         // ---- Images upload ----
         imgInput && imgInput.addEventListener('change', async (e) => {
@@ -3683,7 +4233,327 @@ const driveBtn = document.getElementById('driveImportBtn');
     } catch (e) {}
     renderAll();
     schedulePositionCatalogBtn();
-  </script>
+  
+
+/* ===== PDF Inline rendering (iPad-friendly, supports optional annotations) ===== */
+
+// --- PDF inline helpers (iPad friendly) ---
+function raf2_() {
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+}
+
+/**
+ * Enable simple ink annotation on a canvas (pointer events).
+ * - Draws in device pixels so it stays crisp on Retina/iPad.
+ * - Calls opts.onChange(dataUrl) (debounced) when ink changes.
+ */
+function enableInkOnCanvas_(canvas, opts = {}) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  const state = {
+    penColor: opts.penColor || "#ef4444",
+    penWidth: Number(opts.penWidth || 4),
+    eraser: !!opts.eraser,
+    eraserWidth: Number(opts.eraserWidth || 18),
+    disabled: !!opts.disabled
+  };
+
+  let drawing = false;
+  let last = null;
+  let changeTimer = null;
+
+  function pxScale_() {
+    const rect = canvas.getBoundingClientRect();
+    const sx = rect.width ? (canvas.width / rect.width) : 1;
+    const sy = rect.height ? (canvas.height / rect.height) : 1;
+    return { sx, sy, rect };
+  }
+
+  function getPt_(ev) {
+    const { sx, sy, rect } = pxScale_();
+    const x = (ev.clientX - rect.left) * sx;
+    const y = (ev.clientY - rect.top) * sy;
+    return { x, y, sx, sy };
+  }
+
+  function applyBrush_(sx, sy) {
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    if (state.eraser) {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.strokeStyle = "rgba(0,0,0,1)";
+      ctx.lineWidth = state.eraserWidth * Math.max(sx, sy);
+    } else {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = state.penColor;
+      ctx.lineWidth = state.penWidth * Math.max(sx, sy);
+    }
+  }
+
+  function scheduleChange_(force = false) {
+    if (typeof opts.onChange !== "function") return;
+    if (force) {
+      if (changeTimer) { clearTimeout(changeTimer); changeTimer = null; }
+      try { opts.onChange(canvas.toDataURL("image/png")); } catch (_) {}
+      return;
+    }
+    if (changeTimer) return;
+    changeTimer = setTimeout(() => {
+      changeTimer = null;
+      try { opts.onChange(canvas.toDataURL("image/png")); } catch (_) {}
+    }, 250);
+  }
+
+  function onDown(ev) {
+    if (state.disabled) return;
+    drawing = true;
+    try { canvas.setPointerCapture(ev.pointerId); } catch (_) {}
+    const p = getPt_(ev);
+    last = { x: p.x, y: p.y };
+    applyBrush_(p.sx, p.sy);
+    ctx.beginPath();
+    ctx.moveTo(last.x, last.y);
+    ev.preventDefault();
+  }
+
+  function onMove(ev) {
+    if (!drawing || state.disabled) return;
+    const p = getPt_(ev);
+    applyBrush_(p.sx, p.sy);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    last = { x: p.x, y: p.y };
+    scheduleChange_();
+    ev.preventDefault();
+  }
+
+  function onUp(ev) {
+    if (!drawing) return;
+    drawing = false;
+    try { canvas.releasePointerCapture(ev.pointerId); } catch (_) {}
+    scheduleChange_(true);
+    ev.preventDefault();
+  }
+
+  canvas.style.touchAction = "none"; // crucial for iPad drawing
+  canvas.addEventListener("pointerdown", onDown, { passive: false });
+  canvas.addEventListener("pointermove", onMove, { passive: false });
+  canvas.addEventListener("pointerup", onUp, { passive: false });
+  canvas.addEventListener("pointercancel", onUp, { passive: false });
+
+  return {
+    setMode(mode) { state.eraser = (mode === "eraser"); },
+    setDisabled(v) { state.disabled = !!v; },
+    clear() { ctx.clearRect(0, 0, canvas.width, canvas.height); scheduleChange_(true); },
+    destroy() {
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointercancel", onUp);
+    }
+  };
+}
+
+async function renderPdfInto(containerEl, pdfDataUrlOrBytes, opts = {}) {
+  containerEl.innerHTML = '';
+  if (!pdfDataUrlOrBytes) return;
+
+  // Prefer fit-to-width by default; ignore any legacy tiny zoom values.
+  let zoomFactor = Number(opts.zoomFactor ?? 1);
+  if (!Number.isFinite(zoomFactor) || zoomFactor <= 0) zoomFactor = 1;
+  if (zoomFactor < 0.5) zoomFactor = 1;
+
+  const annotate = !!opts.annotate;
+  const annoStore = (opts.annoStore && typeof opts.annoStore === 'object') ? opts.annoStore : null;
+
+  await ensurePdfJsLoaded();
+  const pdfjsLib = window.pdfjsLib || window['pdfjsLib'] || window['pdfjs-dist/build/pdf'];
+  if (!pdfjsLib || !pdfjsLib.getDocument) throw new Error('PDF.js not ready');
+
+  // Normalize input to Uint8Array
+  let data;
+  if (typeof pdfDataUrlOrBytes === 'string') {
+    if (pdfDataUrlOrBytes.startsWith('data:application/pdf')) {
+      const base64 = (pdfDataUrlOrBytes.split(',')[1] || '');
+      data = toUint8_(atobSafe_(base64));
+    } else if (/^[A-Za-z0-9+/=]+$/.test(pdfDataUrlOrBytes.trim())) {
+      data = toUint8_(atobSafe_(pdfDataUrlOrBytes.trim()));
+    } else {
+      throw new Error('Unsupported PDF input string');
+    }
+  } else if (pdfDataUrlOrBytes instanceof ArrayBuffer) {
+    data = new Uint8Array(pdfDataUrlOrBytes);
+  } else if (pdfDataUrlOrBytes instanceof Uint8Array) {
+    data = pdfDataUrlOrBytes;
+  } else {
+    throw new Error('Unsupported PDF input');
+  }
+
+  // Wait until the container has a usable width (avoid hidden elements => width 0).
+  const hostW = await (async () => {
+  // Panel might have just been shown; wait for layout to settle.
+  try { await raf2_(); } catch (_) { await new Promise((r) => requestAnimationFrame(r)); }
+
+  const wSelf = containerEl.getBoundingClientRect().width || containerEl.clientWidth || 0;
+  const wParent = containerEl.parentElement ? (containerEl.parentElement.getBoundingClientRect().width || containerEl.parentElement.clientWidth || 0) : 0;
+  const wViewport = (document.documentElement && document.documentElement.clientWidth) ? document.documentElement.clientWidth : 0;
+
+  // Prefer the actual element width; if it's 0 due to layout, fall back to parent/viewport.
+  const w = Math.max(wSelf, wParent, Math.floor(wViewport * 0.92), 320);
+  return w;
+})();
+
+const targetW = Math.max(320, Math.floor(hostW - 16));
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+
+  const loadingTask = pdfjsLib.getDocument({ data });
+  const pdf = await loadingTask.promise;
+
+  const pages = [];
+  if (typeof opts.page === 'number' && opts.page >= 1) pages.push(Math.floor(opts.page));
+  else for (let p = 1; p <= pdf.numPages; p++) pages.push(p);
+
+  // Store anno canvases on the container so external UI can interact if needed.
+  containerEl._annoCanvases = [];
+  containerEl._pdfCanvases = [];
+
+  for (const pageNum of pages) {
+    const page = await pdf.getPage(pageNum);
+
+    // Compute scale so the page fits the container width, then apply user zoom.
+    const viewport1 = page.getViewport({ scale: 1 });
+    const baseScale = targetW / viewport1.width;
+    const scale = Math.max(0.25, Math.min(6.0, baseScale * zoomFactor));
+    const viewport = page.getViewport({ scale });
+
+    // Page wrapper fills the container width.
+    const pageWrap = document.createElement('div');
+    pageWrap.className = 'relative mx-auto my-3 w-full overflow-hidden rounded-lg border bg-white shadow-sm';
+    pageWrap.style.maxWidth = '100%';
+
+    const inner = document.createElement('div');
+    inner.className = 'relative w-full';
+    pageWrap.appendChild(inner);
+
+    const pdfCanvas = document.createElement('canvas');
+    pdfCanvas.className = 'block w-full h-auto';
+    // Render at devicePixelRatio for crisp text, while CSS size stays responsive.
+    pdfCanvas.width = Math.floor(viewport.width * dpr);
+    pdfCanvas.height = Math.floor(viewport.height * dpr);
+    pdfCanvas.style.width = '100%';
+    pdfCanvas.style.height = 'auto';
+
+    inner.appendChild(pdfCanvas);
+
+    const ctx = pdfCanvas.getContext('2d', { alpha: false });
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    containerEl._pdfCanvases.push({ pageNum, canvas: pdfCanvas, viewport, dpr });
+
+    if (annotate) {
+      const annoCanvas = document.createElement('canvas');
+      annoCanvas.className = 'absolute inset-0 w-full h-full';
+      annoCanvas.width = pdfCanvas.width;
+      annoCanvas.height = pdfCanvas.height;
+      annoCanvas.style.width = '100%';
+      annoCanvas.style.height = '100%';
+      annoCanvas.style.touchAction = 'none';
+
+      inner.appendChild(annoCanvas);
+      containerEl._annoCanvases.push({ pageNum, canvas: annoCanvas });
+
+      // Restore existing annotation if present.
+      if (annoStore && annoStore[pageNum]) {
+        drawImageToCanvas_(annoCanvas, annoStore[pageNum]);
+      }
+
+      enableInkOnCanvas_(annoCanvas, {
+        color: opts.penColor || '#f97316',
+        width: Number(opts.penWidth || 3),
+        eraser: !!opts.eraser,
+        onChange: (dataUrl) => {
+          if (annoStore) annoStore[pageNum] = dataUrl;
+        }
+      });
+}
+
+    containerEl.appendChild(pageWrap);
+  }
+}
+
+function attachAnnoHandlers_(canvas, pageNum, store) {
+  const ctx = canvas.getContext('2d');
+  const ratioX = () => canvas.width / canvas.getBoundingClientRect().width;
+  const ratioY = () => canvas.height / canvas.getBoundingClientRect().height;
+
+  // Default pen style
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#ef4444'; // red
+  ctx.lineWidth = Math.max(2, (window.devicePixelRatio || 1) * 2.5);
+
+  let drawing = false;
+
+  function pos(e) {
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) * ratioX(),
+      y: (e.clientY - r.top) * ratioY()
+    };
+  }
+
+  function start(e) {
+    drawing = true;
+    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    const p = pos(e);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    e.preventDefault();
+  }
+
+  function move(e) {
+    if (!drawing) return;
+    const p = pos(e);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    e.preventDefault();
+  }
+
+  function end(e) {
+    if (!drawing) return;
+    drawing = false;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    // Persist as dataURL (per page)
+    try { store[pageNum] = canvas.toDataURL('image/png'); } catch (_) {}
+    e.preventDefault();
+  }
+
+  canvas.addEventListener('pointerdown', start, { passive: false });
+  canvas.addEventListener('pointermove', move, { passive: false });
+  canvas.addEventListener('pointerup', end, { passive: false });
+  canvas.addEventListener('pointercancel', end, { passive: false });
+}
+
+function drawImageToCanvas_(canvas, dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      } catch (_) {}
+      resolve();
+    };
+    img.onerror = () => resolve();
+    img.src = dataUrl;
+  });
+}
+/* ===== End PDF Inline rendering override ===== */
+</script>
 
   <!-- PDF modal (排關圖) -->
   <div id="pdfModal" class="fixed inset-0 z-50 hidden">
